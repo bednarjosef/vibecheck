@@ -107,7 +107,7 @@
     top: 100%; /* overlays the 1px border row: no seam, no gap */
     left: 50%;
     width: 150px;
-    height: 7px;
+    height: 5px;
     margin-left: -75px;
     transform-origin: 50% 0;
     opacity: 0;
@@ -121,26 +121,6 @@
     );
   }
 
-  /* …and its light, cast downward in a short soft cone */
-  #panel.glow-bottom::after {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    width: 220px;
-    height: 17px;
-    margin-left: -110px;
-    transform-origin: 50% 0;
-    opacity: 0;
-    transition: opacity 220ms ease;
-    pointer-events: none;
-    background: radial-gradient(
-      55% 100% at 50% 0%,
-      color-mix(in srgb, var(--status-color, var(--unknown)) 30%, transparent),
-      transparent 75%
-    );
-  }
-
   #panel.on.glow-bottom::before {
     opacity: 1;
     animation:
@@ -148,22 +128,13 @@
       lamp-breathe 5.3s ease-in-out infinite;
   }
 
-  #panel.on.glow-bottom::after {
-    opacity: 1;
-    animation:
-      lamp-stretch 7.1s ease-in-out infinite,
-      cast-breathe 5.3s ease-in-out infinite;
-  }
-
-  /* anchored center; swells wide and thick, draws back small — same track
-     for core and cast so they stay one light. Origin at the top edge, so
-     the lens thickens downward, away from the border. */
+  /* anchored center; gently widens and narrows from its ends */
   @keyframes lamp-stretch {
-    0%   { transform: scale(0.85, 0.88); }
-    35%  { transform: scale(1.35, 1.14); }
-    58%  { transform: scale(1.02, 0.96); }
-    82%  { transform: scale(1.24, 1.08); }
-    100% { transform: scale(0.85, 0.88); }
+    0%   { transform: scaleX(0.72); }
+    35%  { transform: scaleX(1.12); }
+    58%  { transform: scaleX(0.88); }
+    82%  { transform: scaleX(1.04); }
+    100% { transform: scaleX(0.72); }
   }
 
   @keyframes lamp-breathe {
@@ -172,17 +143,10 @@
     70%      { opacity: 0.8; }
   }
 
-  @keyframes cast-breathe {
-    0%, 100% { opacity: 0.5; }
-    42%      { opacity: 0.95; }
-    70%      { opacity: 0.65; }
-  }
-
   @media (prefers-reduced-motion: reduce) {
     #panel { transition: opacity 120ms linear; transform: none; }
     #panel.on.glow-border::before { animation: none; opacity: 0.8; }
     #panel.on.glow-bottom::before { animation: none; opacity: 0.8; }
-    #panel.on.glow-bottom::after { animation: none; opacity: 0.6; }
   }
 
   .row {
