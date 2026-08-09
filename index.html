@@ -99,44 +99,45 @@
     72%      { opacity: 0.85; }
   }
 
-  /* the lamp: a bright core riding the bottom edge… */
+  /* the lamp: a lens of light hanging just under the border — thickest in
+     the middle, tapering to nothing at the tips */
   #panel.glow-bottom::before {
     content: '';
     position: absolute;
-    bottom: -1.5px;
+    top: calc(100% + 1px); /* starts right below the border line */
     left: 50%;
-    width: 110px;
-    height: 2.5px;
-    margin-left: -55px;
-    border-radius: 3px;
+    width: 150px;
+    height: 6px;
+    margin-left: -75px;
+    border-radius: 50%;
+    transform-origin: 50% 0;
     opacity: 0;
     transition: opacity 220ms ease;
     pointer-events: none;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      color-mix(in srgb, var(--status-color, var(--unknown)) 80%, transparent) 30%,
-      color-mix(in srgb, var(--status-color, var(--unknown)) 95%, white 0%) 50%,
-      color-mix(in srgb, var(--status-color, var(--unknown)) 80%, transparent) 70%,
-      transparent
+    background: radial-gradient(
+      50% 50% at 50% 38%,
+      color-mix(in srgb, var(--status-color, var(--unknown)) 95%, transparent) 0%,
+      color-mix(in srgb, var(--status-color, var(--unknown)) 65%, transparent) 45%,
+      transparent 78%
     );
   }
 
-  /* …and its light, cast downward in a short tight cone */
+  /* …and its light, cast downward in a short soft cone */
   #panel.glow-bottom::after {
     content: '';
     position: absolute;
-    top: 100%;
+    top: calc(100% + 1px);
     left: 50%;
-    width: 190px;
-    height: 15px;
-    margin-left: -95px;
+    width: 220px;
+    height: 17px;
+    margin-left: -110px;
+    transform-origin: 50% 0;
     opacity: 0;
     transition: opacity 220ms ease;
     pointer-events: none;
     background: radial-gradient(
       55% 100% at 50% 0%,
-      color-mix(in srgb, var(--status-color, var(--unknown)) 32%, transparent),
+      color-mix(in srgb, var(--status-color, var(--unknown)) 30%, transparent),
       transparent 75%
     );
   }
@@ -155,14 +156,15 @@
       cast-breathe 5.3s ease-in-out infinite;
   }
 
-  /* anchored center; breathes wider and narrower from its ends —
-     same track for core and cast so they stay one light */
+  /* anchored center; swells wide and thick, draws back small — same track
+     for core and cast so they stay one light. Origin at the top edge, so
+     the lens thickens downward, away from the border. */
   @keyframes lamp-stretch {
-    0%   { transform: scaleX(0.72); }
-    35%  { transform: scaleX(1.12); }
-    58%  { transform: scaleX(0.88); }
-    82%  { transform: scaleX(1.04); }
-    100% { transform: scaleX(0.72); }
+    0%   { transform: scale(0.85, 0.88); }
+    35%  { transform: scale(1.35, 1.14); }
+    58%  { transform: scale(1.02, 0.96); }
+    82%  { transform: scale(1.24, 1.08); }
+    100% { transform: scale(0.85, 0.88); }
   }
 
   @keyframes lamp-breathe {
