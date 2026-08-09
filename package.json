@@ -23,6 +23,7 @@
       "index.html",
       "settings.html",
       "gnome-shortcut.js",
+      "kde-shortcut.js",
       "launch.js"
     ],
     "linux": {
