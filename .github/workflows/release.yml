@@ -20,6 +20,10 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
+      # electron lives in "dependencies" for the npm-global install story,
+      # but electron-builder insists on devDependencies — shuffle it over
+      - run: npm pkg delete dependencies.electron
+      - run: npm pkg set devDependencies.electron="^31.0.0"
       - run: npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
