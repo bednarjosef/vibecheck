@@ -61,6 +61,7 @@
      wanders, breathes, and casts a tight cone of light downward. */
   @property --spin { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
   @property --trace { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+  @property --wipe { syntax: '<percentage>'; initial-value: -20%; inherits: false; }
 
   #panel.glow-border::before {
     content: '';
@@ -130,8 +131,13 @@
     inset: 0;
     border-radius: 16px;
     padding: 1.5px;
-    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    mask-composite: exclude;
+    /* ring band ∩ a vertical wipe — the wipe boundary sweeps downward so
+       the ring dissolves top-first, draining into the lamp */
+    mask:
+      linear-gradient(to bottom, transparent calc(var(--wipe) - 22%), #000 var(--wipe)),
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: intersect, exclude;
     opacity: 0;
     transition: opacity 220ms ease;
     pointer-events: none;
@@ -146,22 +152,21 @@
   }
 
   #panel.on.glow-bottom::after {
-    animation: ring-intro 1050ms linear both;
+    animation: ring-intro 1250ms linear both;
   }
 
   @keyframes ring-intro {
-    0%    { --trace: 0deg; opacity: 1; }
-    66.7% { --trace: 180deg; opacity: 1; }
-    72%   { --trace: 180deg; opacity: 1; }
-    100%  { --trace: 180deg; opacity: 0; }
+    0%   { --trace: 0deg;   --wipe: -20%; opacity: 1; }
+    56%  { --trace: 180deg; --wipe: -20%; opacity: 1; }
+    100% { --trace: 180deg; --wipe: 130%; opacity: 1; }
   }
 
   #panel.on.glow-bottom::before {
     opacity: 1;
     animation:
-      lamp-stretch 7.1s ease-in-out 950ms infinite,
-      lamp-breathe 5.3s ease-in-out 950ms infinite,
-      lamp-in 450ms ease 950ms both;
+      lamp-stretch 7.1s ease-in-out 720ms infinite,
+      lamp-breathe 5.3s ease-in-out 720ms infinite,
+      lamp-in 500ms ease 720ms both;
   }
 
   /* fades the lens in right as the traced ring dissolves */
