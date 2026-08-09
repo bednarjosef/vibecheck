@@ -104,4 +104,10 @@ whole status page.
 - `status.json` + `components.json` + `incidents/unresolved.json` from
   status.claude.com's Statuspage API
 
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE.md) — the source is open and free
+for any personal, educational, or nonprofit use: run it, fork it, tinker,
+share. Commercial use needs permission from the author.
+
 Not affiliated with Anthropic.

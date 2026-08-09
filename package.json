@@ -7,7 +7,7 @@
     "start": "node launch.js",
     "dist": "electron-builder"
   },
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "author": {
     "name": "Josef Bednar",
     "email": "osobni@josefbednar.com"
@@ -80,7 +80,8 @@
     "launch.js",
     "build/icon.png",
     "build/icon.icns",
-    "build/icon.ico"
+    "build/icon.ico",
+    "LICENSE.md"
   ],
   "repository": {
     "type": "git",
