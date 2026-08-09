@@ -123,14 +123,15 @@
     );
   }
 
-  /* ignition: two beams leave top-center in opposite directions, trace the
-     border, meet at the bottom — then the ring dissolves */
+  /* ignition: two beams leave top-center in opposite directions, trace
+     around the OUTSIDE of the border, meet at the bottom — then the ring
+     erases along the same path. Band thickness matches the lamp. */
   #panel.glow-bottom::after {
     content: '';
     position: absolute;
-    inset: 0;
-    border-radius: 16px;
-    padding: 1.5px;
+    inset: -3.5px;
+    border-radius: 19px;
+    padding: 3.5px;
     mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     mask-composite: exclude;
     opacity: 0;
