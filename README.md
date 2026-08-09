@@ -1,5 +1,8 @@
 # vibecheck
 
+[![npm](https://img.shields.io/npm/v/vibecheck-app?color=3ecf8e&label=npm)](https://www.npmjs.com/package/vibecheck-app)
+[![license](https://img.shields.io/badge/license-PolyForm%20NC-d97757)](LICENSE.md)
+
 Tap **F8** → Claude's live status pops in over whatever you're doing, like
 a little notification; tap again → it melts away. Hold F8 instead → it
 shows only while held.
