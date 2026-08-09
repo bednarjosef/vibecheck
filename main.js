@@ -1,5 +1,5 @@
 // vibecheck — hold a key, see Claude's status. Let go, it melts away.
-const { app, BrowserWindow, Tray, Menu, nativeImage, screen, ipcMain } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, screen, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
@@ -437,15 +437,42 @@ function createTray() {
 }
 
 function buildTrayMenu() {
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: 'Show/hide status', click: () => toggle() },
-      { label: 'Refresh now', click: () => fetchStatus() },
-      { label: 'Settings…', click: () => openSettings() },
-      { type: 'separator' },
-      { label: 'Quit', click: () => app.quit() },
-    ])
-  );
+  const template = [
+    { label: 'Show/hide status', click: () => toggle() },
+    { label: 'Refresh now', click: () => fetchStatus() },
+    { label: 'Settings…', click: () => openSettings() },
+  ];
+  if (updateAvailable) {
+    template.push({ type: 'separator' });
+    template.push({
+      label: `Update available — v${updateAvailable}`,
+      click: () => shell.openExternal('https://github.com/bednarjosef/vibecheck/releases'),
+    });
+  }
+  template.push({ type: 'separator' }, { label: 'Quit', click: () => app.quit() });
+  tray.setContextMenu(Menu.buildFromTemplate(template));
+}
+
+// npm can't auto-update a global package, but we can at least notice
+let updateAvailable = null;
+
+async function checkForUpdate() {
+  try {
+    const res = await fetch('https://registry.npmjs.org/vibe-check/latest');
+    const { version } = await res.json();
+    const newer = (a, b) => {
+      const pa = a.split('.').map(Number);
+      const pb = b.split('.').map(Number);
+      for (let i = 0; i < 3; i++) {
+        if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+      }
+      return false;
+    };
+    if (version && newer(version, app.getVersion()) && version !== updateAvailable) {
+      updateAvailable = version;
+      buildTrayMenu();
+    }
+  } catch (_) {} // offline or unpublished — never bother the user
 }
 
 // ── settings window ─────────────────────────────────────────────────
@@ -598,6 +625,8 @@ if (!app.requestSingleInstanceLock()) {
     }
     fetchStatus();
     setInterval(fetchStatus, POLL_MS);
+    setTimeout(checkForUpdate, 15_000);
+    setInterval(checkForUpdate, 24 * 60 * 60 * 1000);
   });
 }
 
