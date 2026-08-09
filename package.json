@@ -1,5 +1,5 @@
 {
-  "name": "claude-vibecheck",
+  "name": "vibecheck-app",
   "version": "1.1.0",
   "description": "Tap a key, see Claude's live status. Let go, it melts away.",
   "main": "main.js",
@@ -86,8 +86,9 @@
   "keywords": [
     "claude",
     "claude-code",
+    "codex",
     "status",
-    "anthropic",
+    "ai",
     "tray",
     "overlay"
   ]
