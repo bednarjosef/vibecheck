@@ -1,6 +1,6 @@
 {
   "name": "vibecheck-app",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Tap a key, see Claude's live status. Let go, it melts away.",
   "main": "main.js",
   "scripts": {
