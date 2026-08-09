@@ -35,7 +35,7 @@ const GNOME_KEYSYM = { ScrollLock: 'Scroll_Lock' }; // where X names differ
 const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
 
 const GLOW_STYLES = ['bottom', 'border', 'off'];
-const SOUND_THEMES = ['bells', 'pluck', 'kalimba', 'crystal', 'bubble'];
+const SOUND_THEMES = ['bells', 'pluck', 'wood'];
 
 const settings = {
   key: DEFAULT_KEY,
