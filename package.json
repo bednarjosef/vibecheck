@@ -1,6 +1,6 @@
 {
   "name": "vibecheck",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Hold a key, see Claude's status. Let go, it melts away.",
   "main": "main.js",
   "scripts": {
@@ -26,16 +26,23 @@
       "launch.js"
     ],
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "category": "Utility",
       "synopsis": "Tap a key, see Claude's live status"
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "category": "public.app-category.utilities"
     },
     "win": {
-      "target": ["nsis"]
+      "target": [
+        "nsis"
+      ]
     },
     "publish": {
       "provider": "github",
