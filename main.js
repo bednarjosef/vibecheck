@@ -170,31 +170,38 @@ let burstCount = 0;
 let holdStartedAt = 0;
 let suppressKeyup = false;
 
-function show() {
+function show(quiet = false) {
   // always refetch on open — the cached state paints instantly and the live
   // response swaps in a beat later (2s guard so toggle-spam doesn't refetch)
   if (Date.now() - lastFetched > 2_000) fetchStatus();
   positionWindow(); // monitors may have changed since last time
-  if (win && !win.isDestroyed()) win.webContents.send('reveal');
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('reveal');
+    if (!quiet && settings.sound) win.webContents.send('chime', 'open');
+  }
   visible = true;
 }
 
-function hide() {
+function hide(quiet = false) {
   if (autoPeekTimer) {
     clearTimeout(autoPeekTimer);
     autoPeekTimer = null;
   }
-  if (win && !win.isDestroyed()) win.webContents.send('conceal');
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('conceal');
+    if (!quiet && settings.sound) win.webContents.send('chime', 'close');
+  }
   visible = false;
 }
 
-// status changed on its own: pop in briefly, then melt away
+// status changed on its own: pop in briefly, then melt away — quiet, the
+// status-change chime is the soundtrack for this one
 function autoPeek(ms) {
   if (visible) return; // already on screen, the re-render is enough
-  show();
+  show(true);
   autoPeekTimer = setTimeout(() => {
     autoPeekTimer = null;
-    if (!holding) hide();
+    if (!holding) hide(true);
   }, ms);
 }
 
@@ -431,8 +438,8 @@ function openSettings() {
     return;
   }
   settingsWin = new BrowserWindow({
-    width: 380,
-    height: 475,
+    width: 430,
+    height: 535,
     frame: false,
     transparent: true,
     resizable: false,

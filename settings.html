@@ -24,13 +24,13 @@
 
   #panel {
     position: absolute;
-    inset: 8px;
+    inset: 30px; /* room for the shadow to fade out before the window edge */
     display: flex;
     flex-direction: column;
     border-radius: 16px;
     background: rgba(15, 17, 21, 0.98);
     border: 1px solid rgba(255, 255, 255, 0.09);
-    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
     overflow: hidden;
   }
 
@@ -137,7 +137,7 @@
         <input type="checkbox" id="autoReveal" />
       </div>
       <div class="row">
-        <div><div class="lbl">Sound on change</div><div class="sub">soft chime — down and back up</div></div>
+        <div><div class="lbl">Sound</div><div class="sub">blips on open/close · chime on status change</div></div>
         <input type="checkbox" id="sound" />
       </div>
       <div class="row">
