@@ -128,9 +128,9 @@
         <div><div class="lbl">Shortcut key</div><div class="sub">tap toggles · hold peeks</div></div>
         <select id="key"></select>
       </div>
-      <div class="row" id="gnome-row" hidden>
-        <div><div class="lbl">System-wide key (GNOME)</div><div class="sub">works in native Wayland apps too</div></div>
-        <input type="checkbox" id="gnomeBind" />
+      <div class="row" id="system-row" hidden>
+        <div><div class="lbl" id="system-lbl">System-wide key</div><div class="sub">works in native Wayland apps too</div></div>
+        <input type="checkbox" id="systemBind" />
       </div>
       <div class="row">
         <div><div class="lbl">Auto-reveal on change</div><div class="sub">peeks when status flips, and on recovery</div></div>
@@ -169,9 +169,10 @@
     );
     $('display').innerHTML = opts.join('');
 
-    if (s.gnome.available) {
-      $('gnome-row').hidden = false;
-      $('gnomeBind').checked = s.gnome.installed;
+    if (s.systemBind.available) {
+      $('system-row').hidden = false;
+      $('system-lbl').textContent = `System-wide key (${s.systemBind.desktop})`;
+      $('systemBind').checked = s.systemBind.installed;
     }
     $('autoReveal').checked = s.settings.autoReveal;
     $('sound').checked = s.settings.sound;
@@ -182,7 +183,7 @@
   $('display').addEventListener('change', (e) =>
     window.vc.set({ displayId: e.target.value === '' ? null : Number(e.target.value) })
   );
-  for (const id of ['gnomeBind', 'autoReveal', 'sound', 'autostart']) {
+  for (const id of ['systemBind', 'autoReveal', 'sound', 'autostart']) {
     $(id).addEventListener('change', (e) => window.vc.set({ [id]: e.target.checked }));
   }
   $('close').addEventListener('click', () => window.vc.close());

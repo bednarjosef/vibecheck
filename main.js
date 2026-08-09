@@ -5,6 +5,7 @@ const fs = require('fs');
 const { execFile } = require('child_process');
 const { uIOhook, UiohookKey } = require('uiohook-napi');
 const gnomeShortcut = require('./gnome-shortcut');
+const kdeShortcut = require('./kde-shortcut');
 
 // ── config ──────────────────────────────────────────────────────────
 const DEFAULT_KEY = 'F8';         // change via tray → Shortcut key, or config.json
@@ -63,13 +64,35 @@ function saveConfig() {
   }
 }
 
-function installGnomeBinding() {
-  return gnomeShortcut.install({
-    binding: GNOME_KEYSYM[settings.key] || settings.key,
-    // touching the poke file costs ~10ms per key event, which is what lets
-    // tap/hold detection stay snappy (vs ~0.5s app spawns)
-    command: `bash -c 'touch "\${XDG_RUNTIME_DIR:-/tmp}/vibecheck-poke"'`,
-  });
+// the desktop's own shortcut system: covers native Wayland apps where the
+// X11 key hook can't see keystrokes. GNOME via gsettings, KDE via kglobalaccel.
+function shortcutProvider() {
+  if (gnomeShortcut.isGnome()) {
+    return {
+      desktop: 'GNOME',
+      mod: gnomeShortcut,
+      binding: () => GNOME_KEYSYM[settings.key] || settings.key,
+      // touching the poke file costs ~10ms per key event, which is what
+      // lets tap/hold detection stay snappy (vs ~0.5s app spawns)
+      command: `bash -c 'touch "\${XDG_RUNTIME_DIR:-/tmp}/vibecheck-poke"'`,
+    };
+  }
+  if (kdeShortcut.isKde()) {
+    return {
+      desktop: 'KDE',
+      mod: kdeShortcut,
+      binding: () => settings.key,
+      // .desktop Exec fields hate quoting, so bake the resolved path in
+      command: `touch ${POKE_FILE}`,
+    };
+  }
+  return null;
+}
+
+function installSystemBinding() {
+  const p = shortcutProvider();
+  if (!p) return Promise.resolve();
+  return p.mod.install({ binding: p.binding(), command: p.command });
 }
 
 async function setKey(name) {
@@ -79,11 +102,12 @@ async function setKey(name) {
   saveConfig();
   if (tray) tray.setToolTip(`vibecheck — ${settings.key}: Claude status`);
   try {
-    if (gnomeShortcut.isGnome() && (await gnomeShortcut.isInstalled())) {
-      await installGnomeBinding(); // rebind the system shortcut too
+    const p = shortcutProvider();
+    if (p && (await p.mod.isInstalled())) {
+      await installSystemBinding(); // rebind the system shortcut too
     }
   } catch (err) {
-    console.error('could not rebind GNOME shortcut:', err);
+    console.error('could not rebind system shortcut:', err);
   }
 }
 
@@ -422,13 +446,16 @@ function openSettings() {
   settingsWin.on('closed', () => (settingsWin = null));
 }
 
-ipcMain.handle('settings:get', async () => ({
+ipcMain.handle('settings:get', async () => {
+  const p = shortcutProvider();
+  return {
   settings,
   keyChoices: KEY_CHOICES,
   platform: process.platform,
-  gnome: {
-    available: gnomeShortcut.isGnome(),
-    installed: gnomeShortcut.isGnome() ? await gnomeShortcut.isInstalled() : false,
+  systemBind: {
+    available: !!p,
+    desktop: p ? p.desktop : null,
+    installed: p ? await p.mod.isInstalled() : false,
   },
   displays: screen.getAllDisplays().map((d) => ({
     id: d.id,
@@ -436,7 +463,8 @@ ipcMain.handle('settings:get', async () => ({
       `${d.label || 'Display'} — ${d.size.width}×${d.size.height}` +
       (d.id === screen.getPrimaryDisplay().id ? ' (primary)' : ''),
   })),
-}));
+  };
+});
 
 ipcMain.handle('settings:set', async (_e, patch) => {
   if (typeof patch !== 'object' || !patch) return false;
@@ -451,12 +479,15 @@ ipcMain.handle('settings:set', async (_e, patch) => {
     settings.displayId = typeof patch.displayId === 'number' ? patch.displayId : null;
     positionWindow();
   }
-  if ('gnomeBind' in patch) {
+  if ('systemBind' in patch) {
     try {
-      if (patch.gnomeBind) await installGnomeBinding();
-      else await gnomeShortcut.uninstall();
+      const p = shortcutProvider();
+      if (p) {
+        if (patch.systemBind) await installSystemBinding();
+        else await p.mod.uninstall();
+      }
     } catch (err) {
-      console.error('GNOME shortcut change failed:', err);
+      console.error('system shortcut change failed:', err);
     }
   }
   saveConfig();

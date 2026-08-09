@@ -36,8 +36,9 @@ Tray → **Settings…** opens a small panel:
 
 - **Shortcut key** — pick from F6–F12, ScrollLock, Pause (any `UiohookKey`
   name also works by hand in `~/.config/vibecheck/config.json`)
-- **System-wide key (GNOME)** — one click writes a GNOME custom shortcut so
-  the key works from anywhere, including native Wayland windows
+- **System-wide key (GNOME & KDE)** — one click registers the key with your
+  desktop (gsettings on GNOME, kglobalaccel on KDE Plasma 5/6) so it works
+  from anywhere, including native Wayland windows
 - **Auto-reveal on change** — the pill peeks on its own when the status
   flips, and again when it recovers
 - **Sound on change** — a soft two-note chime, down for bad news, up for
@@ -49,10 +50,10 @@ Tray → **Settings…** opens a small panel:
 
 - **Tray → Show/hide status**
 - **Run the app again** — a second launch just pokes the running instance
-  and exits. On non-GNOME desktops, bind any system shortcut to
+  and exits. On desktops other than GNOME/KDE, bind any system shortcut to
   `node <path-to-repo>/launch.js`.
 
-The GNOME binding itself just touches a file the app watches (~10ms per key
+The system binding itself just touches a file the app watches (~10ms per key
 event); GNOME auto-repeats it while the key is held, and the app reads that
 train to tell taps (toggle) from holds (show while held, gone within ~150ms
 of release).
@@ -74,8 +75,8 @@ whole status page.
 - **Windows** — works out of the box.
 - **Linux** — needs a compositor for window transparency (fine on GNOME/KDE).
   On **Wayland** the key hook runs through XWayland, so the plain key is only
-  seen while an X11/XWayland app has focus — use the GNOME binding from
-  Settings for a shortcut that works everywhere.
+  seen while an X11/XWayland app has focus — use the system binding from
+  Settings (GNOME and KDE) for a shortcut that works everywhere.
 
 ## How it works
 
