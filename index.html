@@ -167,16 +167,16 @@
     0%   { --trace: 0deg;   --erase: 0deg;   opacity: 1; animation-timing-function: linear; }
     49%  { --trace: 180deg; --erase: 0deg;   opacity: 1; animation-timing-function: ease-in; }
     63%  { --trace: 180deg; --erase: 62deg;  opacity: 1; animation-timing-function: ease-out; }
-    84%  { --trace: 180deg; --erase: 108deg; opacity: 1; animation-timing-function: ease-in-out; }
-    100% { --trace: 180deg; --erase: 108deg; opacity: 0; }
+    82%  { --trace: 180deg; --erase: 112deg; opacity: 1; animation-timing-function: ease-out; }
+    100% { --trace: 180deg; --erase: 126deg; opacity: 0; }
   }
 
   #panel.on.glow-bottom::before {
     opacity: 1;
     animation:
-      lamp-stretch 7.1s ease-in-out 1300ms infinite,
-      lamp-breathe 5.3s ease-in-out 1300ms infinite,
-      lamp-in 400ms ease 1300ms both;
+      lamp-stretch 7.1s ease-in-out 1120ms infinite,
+      lamp-breathe 5.3s ease-in-out 1120ms infinite,
+      lamp-in 420ms ease 1120ms both;
   }
 
   /* fades the lens in right as the traced ring dissolves */
