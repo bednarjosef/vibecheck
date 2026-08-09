@@ -144,25 +144,25 @@
   #panel.on.glow-bottom::before {
     opacity: 1;
     animation:
-      lamp-slide 9.5s ease-in-out infinite,
+      lamp-stretch 7.1s ease-in-out infinite,
       lamp-breathe 5.3s ease-in-out infinite;
   }
 
   #panel.on.glow-bottom::after {
     opacity: 1;
     animation:
-      lamp-slide 9.5s ease-in-out infinite,
+      lamp-stretch 7.1s ease-in-out infinite,
       cast-breathe 5.3s ease-in-out infinite;
   }
 
-  /* wanders the edge, pausing and turning — same track for core and cast */
-  @keyframes lamp-slide {
-    0%   { transform: translateX(0); }
-    26%  { transform: translateX(-62px); }
-    44%  { transform: translateX(-38px); }
-    58%  { transform: translateX(34px); }
-    80%  { transform: translateX(66px); }
-    100% { transform: translateX(0); }
+  /* anchored center; breathes wider and narrower from its ends —
+     same track for core and cast so they stay one light */
+  @keyframes lamp-stretch {
+    0%   { transform: scaleX(0.72); }
+    35%  { transform: scaleX(1.12); }
+    58%  { transform: scaleX(0.88); }
+    82%  { transform: scaleX(1.04); }
+    100% { transform: scaleX(0.72); }
   }
 
   @keyframes lamp-breathe {
