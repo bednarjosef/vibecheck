@@ -154,25 +154,29 @@
   }
 
   #panel.on.glow-bottom::after {
-    animation: ring-intro 1400ms linear both;
+    animation: ring-intro 1600ms linear both;
   }
 
   /* draw the full ring, retract until only the bottom arc the lamp will
      occupy remains (±72° ≈ the lens's 150px at this pill height), then
-     that remnant melts in place as the lens blooms under it */
+     that remnant melts in place as the lens blooms under it.
+     The erase decelerates: angle→perimeter mapping is very nonlinear on a
+     wide flat pill, so constant angular speed would visually accelerate
+     and stutter across the last stretch of the bottom edge. */
   @keyframes ring-intro {
-    0%   { --trace: 0deg;   --erase: 0deg;   opacity: 1; }
-    56%  { --trace: 180deg; --erase: 0deg;   opacity: 1; }
-    92%  { --trace: 180deg; --erase: 108deg; opacity: 1; }
+    0%   { --trace: 0deg;   --erase: 0deg;   opacity: 1; animation-timing-function: linear; }
+    49%  { --trace: 180deg; --erase: 0deg;   opacity: 1; animation-timing-function: ease-in; }
+    63%  { --trace: 180deg; --erase: 62deg;  opacity: 1; animation-timing-function: ease-out; }
+    84%  { --trace: 180deg; --erase: 108deg; opacity: 1; animation-timing-function: ease-in-out; }
     100% { --trace: 180deg; --erase: 108deg; opacity: 0; }
   }
 
   #panel.on.glow-bottom::before {
     opacity: 1;
     animation:
-      lamp-stretch 7.1s ease-in-out 1150ms infinite,
-      lamp-breathe 5.3s ease-in-out 1150ms infinite,
-      lamp-in 350ms ease 1150ms both;
+      lamp-stretch 7.1s ease-in-out 1300ms infinite,
+      lamp-breathe 5.3s ease-in-out 1300ms infinite,
+      lamp-in 400ms ease 1300ms both;
   }
 
   /* fades the lens in right as the traced ring dissolves */
