@@ -99,26 +99,25 @@
     72%      { opacity: 0.85; }
   }
 
-  /* the lamp: a lens of light hanging just under the border — thickest in
-     the middle, tapering to nothing at the tips */
+  /* the lamp: a half-lens fused to the border line — flat top welded to the
+     edge, thickest at center, its underside tapering away to nothing */
   #panel.glow-bottom::before {
     content: '';
     position: absolute;
-    top: calc(100% + 1px); /* starts right below the border line */
+    top: 100%; /* overlays the 1px border row: no seam, no gap */
     left: 50%;
     width: 150px;
-    height: 6px;
+    height: 7px;
     margin-left: -75px;
-    border-radius: 50%;
     transform-origin: 50% 0;
     opacity: 0;
     transition: opacity 220ms ease;
     pointer-events: none;
     background: radial-gradient(
-      50% 50% at 50% 38%,
+      50% 100% at 50% 0%,
       color-mix(in srgb, var(--status-color, var(--unknown)) 95%, transparent) 0%,
-      color-mix(in srgb, var(--status-color, var(--unknown)) 65%, transparent) 45%,
-      transparent 78%
+      color-mix(in srgb, var(--status-color, var(--unknown)) 60%, transparent) 48%,
+      transparent 82%
     );
   }
 
@@ -126,7 +125,7 @@
   #panel.glow-bottom::after {
     content: '';
     position: absolute;
-    top: calc(100% + 1px);
+    top: 100%;
     left: 50%;
     width: 220px;
     height: 17px;
