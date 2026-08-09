@@ -60,6 +60,7 @@
      own hairline border. glow-bottom: a small lamp on the bottom edge that
      wanders, breathes, and casts a tight cone of light downward. */
   @property --spin { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+  @property --trace { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
 
   #panel.glow-border::before {
     content: '';
@@ -121,11 +122,52 @@
     );
   }
 
+  /* ignition: two beams leave top-center in opposite directions, trace the
+     border, meet at the bottom — then the ring dissolves */
+  #panel.glow-bottom::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    padding: 1.5px;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 220ms ease;
+    pointer-events: none;
+    background: conic-gradient(
+      color-mix(in srgb, var(--status-color, var(--unknown)) 75%, transparent) 0deg,
+      color-mix(in srgb, var(--status-color, var(--unknown)) 75%, transparent) var(--trace),
+      transparent var(--trace),
+      transparent calc(360deg - var(--trace)),
+      color-mix(in srgb, var(--status-color, var(--unknown)) 75%, transparent) calc(360deg - var(--trace)),
+      color-mix(in srgb, var(--status-color, var(--unknown)) 75%, transparent) 360deg
+    );
+  }
+
+  #panel.on.glow-bottom::after {
+    animation: ring-intro 1050ms linear both;
+  }
+
+  @keyframes ring-intro {
+    0%    { --trace: 0deg; opacity: 1; }
+    66.7% { --trace: 180deg; opacity: 1; }
+    72%   { --trace: 180deg; opacity: 1; }
+    100%  { --trace: 180deg; opacity: 0; }
+  }
+
   #panel.on.glow-bottom::before {
     opacity: 1;
     animation:
-      lamp-stretch 7.1s ease-in-out infinite,
-      lamp-breathe 5.3s ease-in-out infinite;
+      lamp-stretch 7.1s ease-in-out 950ms infinite,
+      lamp-breathe 5.3s ease-in-out 950ms infinite,
+      lamp-in 450ms ease 950ms both;
+  }
+
+  /* fades the lens in right as the traced ring dissolves */
+  @keyframes lamp-in {
+    from { opacity: 0; }
+    to   { opacity: 0.65; }
   }
 
   /* anchored center; gently widens and narrows from its ends */
@@ -147,6 +189,7 @@
     #panel { transition: opacity 120ms linear; transform: none; }
     #panel.on.glow-border::before { animation: none; opacity: 0.8; }
     #panel.on.glow-bottom::before { animation: none; opacity: 0.8; }
+    #panel.on.glow-bottom::after { animation: none; opacity: 0; }
   }
 
   .row {
