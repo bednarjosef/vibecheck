@@ -55,12 +55,13 @@
     transition-duration: 150ms;
   }
 
-  /* the living part: a soft shimmer of the status color drifting along the
-     pill's own 1px border. Contained entirely inside the silhouette — over
-     any wallpaper it's just a border, not a glow. */
+  /* ── ambient light (settings → Ambient light) ─────────────────────
+     glow-border: a shimmer of the status color drifting along the pill's
+     own hairline border. glow-bottom: a small lamp on the bottom edge that
+     wanders, breathes, and casts a tight cone of light downward. */
   @property --spin { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
 
-  #panel::before {
+  #panel.glow-border::before {
     content: '';
     position: absolute;
     inset: 0;
@@ -83,7 +84,7 @@
     );
   }
 
-  #panel.on::before {
+  #panel.on.glow-border::before {
     opacity: 1;
     animation:
       spin 13s linear infinite,
@@ -98,9 +99,89 @@
     72%      { opacity: 0.85; }
   }
 
+  /* the lamp: a bright core riding the bottom edge… */
+  #panel.glow-bottom::before {
+    content: '';
+    position: absolute;
+    bottom: -1.5px;
+    left: 50%;
+    width: 110px;
+    height: 2.5px;
+    margin-left: -55px;
+    border-radius: 3px;
+    opacity: 0;
+    transition: opacity 220ms ease;
+    pointer-events: none;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--status-color, var(--unknown)) 80%, transparent) 30%,
+      color-mix(in srgb, var(--status-color, var(--unknown)) 95%, white 0%) 50%,
+      color-mix(in srgb, var(--status-color, var(--unknown)) 80%, transparent) 70%,
+      transparent
+    );
+  }
+
+  /* …and its light, cast downward in a short tight cone */
+  #panel.glow-bottom::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    width: 190px;
+    height: 15px;
+    margin-left: -95px;
+    opacity: 0;
+    transition: opacity 220ms ease;
+    pointer-events: none;
+    background: radial-gradient(
+      55% 100% at 50% 0%,
+      color-mix(in srgb, var(--status-color, var(--unknown)) 32%, transparent),
+      transparent 75%
+    );
+  }
+
+  #panel.on.glow-bottom::before {
+    opacity: 1;
+    animation:
+      lamp-slide 9.5s ease-in-out infinite,
+      lamp-breathe 5.3s ease-in-out infinite;
+  }
+
+  #panel.on.glow-bottom::after {
+    opacity: 1;
+    animation:
+      lamp-slide 9.5s ease-in-out infinite,
+      cast-breathe 5.3s ease-in-out infinite;
+  }
+
+  /* wanders the edge, pausing and turning — same track for core and cast */
+  @keyframes lamp-slide {
+    0%   { transform: translateX(0); }
+    26%  { transform: translateX(-62px); }
+    44%  { transform: translateX(-38px); }
+    58%  { transform: translateX(34px); }
+    80%  { transform: translateX(66px); }
+    100% { transform: translateX(0); }
+  }
+
+  @keyframes lamp-breathe {
+    0%, 100% { opacity: 0.65; }
+    42%      { opacity: 1; }
+    70%      { opacity: 0.8; }
+  }
+
+  @keyframes cast-breathe {
+    0%, 100% { opacity: 0.5; }
+    42%      { opacity: 0.95; }
+    70%      { opacity: 0.65; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     #panel { transition: opacity 120ms linear; transform: none; }
-    #panel.on::before { animation: none; opacity: 0.8; }
+    #panel.on.glow-border::before { animation: none; opacity: 0.8; }
+    #panel.on.glow-bottom::before { animation: none; opacity: 0.8; }
+    #panel.on.glow-bottom::after { animation: none; opacity: 0.6; }
   }
 
   .row {
@@ -258,6 +339,11 @@
   window.vibecheck.onReveal(() => panel.classList.add('on'));
   window.vibecheck.onConceal(() => panel.classList.remove('on'));
   window.vibecheck.onChime(chime);
+  window.vibecheck.onGlow((style) => {
+    panel.classList.remove('glow-border', 'glow-bottom');
+    if (style === 'border') panel.classList.add('glow-border');
+    else if (style === 'bottom') panel.classList.add('glow-bottom');
+  });
 </script>
 </body>
 </html>

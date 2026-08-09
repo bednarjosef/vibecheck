@@ -44,6 +44,9 @@ Tray → **Settings…** opens a small panel:
 - **Sound on change** — a soft two-note chime, down for bad news, up for
   recovery (off by default)
 - **Start at login**
+- **Ambient light** — a living glow in the status color: *Underglow* (a
+  lamp wandering the bottom edge, casting light downward), *Border
+  shimmer* (light drifting along the pill's hairline border), or *Off*
 - **Display** — which monitor the pill appears on (default: primary)
 
 ## Without the key

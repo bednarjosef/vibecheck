@@ -34,12 +34,15 @@ const KEY_CHOICES = ['F6', 'F7', 'F8', 'F9', 'F10', 'F12', 'ScrollLock', 'Pause'
 const GNOME_KEYSYM = { ScrollLock: 'Scroll_Lock' }; // where X names differ
 const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
 
+const GLOW_STYLES = ['bottom', 'border', 'off'];
+
 const settings = {
   key: DEFAULT_KEY,
   autoReveal: true,  // peek on its own when the status changes
   sound: false,      // chime on change
   autostart: false,  // launch at login
   displayId: null,   // null = primary display
+  glow: 'bottom',    // ambient light: bottom | border | off
 };
 let holdKey = UiohookKey[DEFAULT_KEY];
 
@@ -51,8 +54,13 @@ function loadConfig() {
       if (typeof c[k] === 'boolean') settings[k] = c[k];
     }
     if (typeof c.displayId === 'number') settings.displayId = c.displayId;
+    if (GLOW_STYLES.includes(c.glow)) settings.glow = c.glow;
   } catch (_) {} // no config yet, or unreadable — stay on the defaults
   holdKey = UiohookKey[settings.key];
+}
+
+function sendGlow() {
+  if (win && !win.isDestroyed()) win.webContents.send('glow', settings.glow);
 }
 
 function saveConfig() {
@@ -411,6 +419,7 @@ function createWindow() {
   win.loadFile('index.html');
   win.webContents.on('did-finish-load', () => {
     if (lastData) win.webContents.send('status', lastData);
+    sendGlow();
   });
 }
 
@@ -441,7 +450,7 @@ function openSettings() {
   }
   settingsWin = new BrowserWindow({
     width: 430,
-    height: 535,
+    height: 595,
     frame: false,
     transparent: true,
     resizable: false,
@@ -487,6 +496,10 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('displayId' in patch) {
     settings.displayId = typeof patch.displayId === 'number' ? patch.displayId : null;
     positionWindow();
+  }
+  if ('glow' in patch && GLOW_STYLES.includes(patch.glow)) {
+    settings.glow = patch.glow;
+    sendGlow();
   }
   if ('systemBind' in patch) {
     try {

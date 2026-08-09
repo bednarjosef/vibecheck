@@ -5,4 +5,5 @@ contextBridge.exposeInMainWorld('vibecheck', {
   onReveal: (cb) => ipcRenderer.on('reveal', () => cb()),
   onConceal: (cb) => ipcRenderer.on('conceal', () => cb()),
   onChime: (cb) => ipcRenderer.on('chime', (_e, kind) => cb(kind)),
+  onGlow: (cb) => ipcRenderer.on('glow', (_e, style) => cb(style)),
 });

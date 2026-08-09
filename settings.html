@@ -145,6 +145,14 @@
         <input type="checkbox" id="autostart" />
       </div>
       <div class="row">
+        <div><div class="lbl">Ambient light</div><div class="sub">how the pill glows, in the status color</div></div>
+        <select id="glow">
+          <option value="bottom">Underglow</option>
+          <option value="border">Border shimmer</option>
+          <option value="off">Off</option>
+        </select>
+      </div>
+      <div class="row">
         <div><div class="lbl">Display</div><div class="sub">where the pill appears</div></div>
         <select id="display"></select>
       </div>
@@ -179,12 +187,14 @@
     $('autoReveal').checked = s.settings.autoReveal;
     $('sound').checked = s.settings.sound;
     $('autostart').checked = s.settings.autostart;
+    $('glow').value = s.settings.glow;
   }
 
   $('key').addEventListener('change', (e) => window.vc.set({ key: e.target.value }));
   $('display').addEventListener('change', (e) =>
     window.vc.set({ displayId: e.target.value === '' ? null : Number(e.target.value) })
   );
+  $('glow').addEventListener('change', (e) => window.vc.set({ glow: e.target.value }));
   for (const id of ['systemBind', 'autoReveal', 'sound', 'autostart']) {
     $(id).addEventListener('change', (e) => window.vc.set({ [id]: e.target.checked }));
   }
