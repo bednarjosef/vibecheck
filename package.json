@@ -1,6 +1,6 @@
 {
   "name": "vibecheck",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Hold a key, see Claude's status. Let go, it melts away.",
   "main": "main.js",
   "scripts": {
@@ -40,7 +40,8 @@
     "publish": {
       "provider": "github",
       "owner": "bednarjosef",
-      "repo": "vibecheck"
+      "repo": "vibecheck",
+      "releaseType": "release"
     }
   },
   "dependencies": {

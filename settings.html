@@ -125,11 +125,11 @@
     </header>
     <main>
       <div class="row">
-        <div><div class="lbl">Shortcut key</div><div class="sub">tap toggles · hold peeks</div></div>
+        <div><div class="lbl">Shortcut key</div><div class="sub" id="key-sub">tap toggles · hold peeks</div></div>
         <select id="key"></select>
       </div>
       <div class="row" id="system-row" hidden>
-        <div><div class="lbl" id="system-lbl">System-wide key</div><div class="sub">works in native Wayland apps too</div></div>
+        <div><div class="lbl">System-wide key</div><div class="sub">registers the key with your desktop so it works in every app</div></div>
         <input type="checkbox" id="systemBind" />
       </div>
       <div class="row">
@@ -171,8 +171,10 @@
 
     if (s.systemBind.available) {
       $('system-row').hidden = false;
-      $('system-lbl').textContent = `System-wide key (${s.systemBind.desktop})`;
       $('systemBind').checked = s.systemBind.installed;
+    }
+    if (s.platform === 'darwin') {
+      $('key-sub').textContent = 'tap toggles · hold peeks · needs Accessibility permission';
     }
     $('autoReveal').checked = s.settings.autoReveal;
     $('sound').checked = s.settings.sound;
