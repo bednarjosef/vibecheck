@@ -458,7 +458,7 @@ let updateAvailable = null;
 
 async function checkForUpdate() {
   try {
-    const res = await fetch('https://registry.npmjs.org/vibe-check/latest');
+    const res = await fetch('https://registry.npmjs.org/vibecheck-app/latest');
     const { version } = await res.json();
     const newer = (a, b) => {
       const pa = a.split('.').map(Number);
