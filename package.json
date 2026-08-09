@@ -1,6 +1,6 @@
 {
   "name": "vibecheck",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Hold a key, see Claude's status. Let go, it melts away.",
   "main": "main.js",
   "scripts": {
