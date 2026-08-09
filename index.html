@@ -129,9 +129,9 @@
   #panel.glow-bottom::after {
     content: '';
     position: absolute;
-    inset: -1.5px;
-    border-radius: 17.5px;
-    padding: 1.5px;
+    inset: -1px;
+    border-radius: 17px;
+    padding: 1px;
     mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     mask-composite: exclude;
     opacity: 0;
@@ -142,12 +142,12 @@
     background: conic-gradient(
       transparent 0deg,
       transparent var(--erase),
-      color-mix(in srgb, var(--status-color, var(--unknown)) 75%, transparent) var(--erase),
-      color-mix(in srgb, var(--status-color, var(--unknown)) 75%, transparent) var(--trace),
+      color-mix(in srgb, var(--status-color, var(--unknown)) 58%, transparent) var(--erase),
+      color-mix(in srgb, var(--status-color, var(--unknown)) 58%, transparent) var(--trace),
       transparent var(--trace),
       transparent calc(360deg - var(--trace)),
-      color-mix(in srgb, var(--status-color, var(--unknown)) 75%, transparent) calc(360deg - var(--trace)),
-      color-mix(in srgb, var(--status-color, var(--unknown)) 75%, transparent) calc(360deg - var(--erase)),
+      color-mix(in srgb, var(--status-color, var(--unknown)) 58%, transparent) calc(360deg - var(--trace)),
+      color-mix(in srgb, var(--status-color, var(--unknown)) 58%, transparent) calc(360deg - var(--erase)),
       transparent calc(360deg - var(--erase)),
       transparent 360deg
     );
