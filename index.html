@@ -55,82 +55,52 @@
     transition-duration: 150ms;
   }
 
-  /* living rim light: a thin ring just OUTSIDE the pill's edge (masked so
-     nothing paints under the translucent panel). One bright arc orbits the
-     perimeter while a dimmer arc counter-rotates on a different period —
-     they pass, merge, and separate, so it never looks mechanical. */
-  @property --spin-a { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
-  @property --spin-b { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+  /* the living part: a soft shimmer of the status color drifting along the
+     pill's own 1px border. Contained entirely inside the silhouette — over
+     any wallpaper it's just a border, not a glow. */
+  @property --spin { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
 
-  #panel::before,
-  #panel::after {
+  #panel::before {
     content: '';
     position: absolute;
-    inset: -8px;
-    z-index: -1;
-    border-radius: 24px;
-    padding: 8px; /* ring thickness — the mask keeps only this outer band */
+    inset: 0;
+    border-radius: 16px;
+    padding: 1.5px; /* the mask keeps only this hairline band */
     mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     mask-composite: exclude;
     opacity: 0;
-    filter: blur(2.5px);
     transition: opacity 220ms ease;
     pointer-events: none;
-  }
-
-  #panel::before {
     background: conic-gradient(
-      from var(--spin-a),
-      transparent 0deg,
-      color-mix(in srgb, var(--status-color, var(--unknown)) 50%, transparent) 55deg,
-      color-mix(in srgb, var(--status-color, var(--unknown)) 95%, transparent) 90deg,
-      color-mix(in srgb, var(--status-color, var(--unknown)) 50%, transparent) 125deg,
-      transparent 185deg,
-      transparent 235deg,
-      color-mix(in srgb, var(--status-color, var(--unknown)) 30%, transparent) 285deg,
-      transparent 335deg
-    );
-  }
-
-  #panel::after {
-    background: conic-gradient(
-      from var(--spin-b),
-      transparent 0deg,
-      color-mix(in srgb, var(--status-color, var(--unknown)) 45%, transparent) 75deg,
-      transparent 160deg
+      from var(--spin),
+      color-mix(in srgb, var(--status-color, var(--unknown)) 10%, transparent) 0deg,
+      color-mix(in srgb, var(--status-color, var(--unknown)) 38%, transparent) 70deg,
+      color-mix(in srgb, var(--status-color, var(--unknown)) 62%, transparent) 105deg,
+      color-mix(in srgb, var(--status-color, var(--unknown)) 38%, transparent) 140deg,
+      color-mix(in srgb, var(--status-color, var(--unknown)) 10%, transparent) 210deg,
+      color-mix(in srgb, var(--status-color, var(--unknown)) 26%, transparent) 290deg,
+      color-mix(in srgb, var(--status-color, var(--unknown)) 10%, transparent) 360deg
     );
   }
 
   #panel.on::before {
+    opacity: 1;
     animation:
-      spin-a 11s linear infinite,
-      rim-breathe-a 4.7s ease-in-out infinite;
+      spin 13s linear infinite,
+      border-breathe 5.9s ease-in-out infinite;
   }
 
-  #panel.on::after {
-    animation:
-      spin-b 17s linear infinite reverse,
-      rim-breathe-b 7.3s ease-in-out -2.4s infinite;
-  }
+  @keyframes spin { from { --spin: 0deg } to { --spin: 360deg } }
 
-  @keyframes spin-a { from { --spin-a: 0deg } to { --spin-a: 360deg } }
-  @keyframes spin-b { from { --spin-b: 0deg } to { --spin-b: 360deg } }
-
-  @keyframes rim-breathe-a {
-    0%, 100% { opacity: 0.5; }
-    38%      { opacity: 0.85; }
-    68%      { opacity: 0.6; }
-  }
-
-  @keyframes rim-breathe-b {
-    0%, 100% { opacity: 0.25; }
-    52%      { opacity: 0.55; }
+  @keyframes border-breathe {
+    0%, 100% { opacity: 0.75; }
+    45%      { opacity: 1; }
+    72%      { opacity: 0.85; }
   }
 
   @media (prefers-reduced-motion: reduce) {
     #panel { transition: opacity 120ms linear; transform: none; }
-    #panel.on::before { animation: none; opacity: 0.5; }
-    #panel.on::after { animation: none; opacity: 0.3; }
+    #panel.on::before { animation: none; opacity: 0.8; }
   }
 
   .row {
