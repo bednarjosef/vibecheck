@@ -4,7 +4,7 @@ Tap **F8** → Claude's live status pops in over whatever you're doing, like
 a little notification; tap again → it melts away. Hold F8 instead → it
 shows only while held.
 
-![vibecheck demo](docs/hero.gif)
+![vibecheck demo](https://raw.githubusercontent.com/bednarjosef/vibecheck/main/docs/hero.gif)
 
 Data comes straight from [status.claude.com](https://status.claude.com)'s
 public Statuspage API. Polled every 60s in the background so the reveal
@@ -15,11 +15,24 @@ for a few seconds (and again on recovery), with an optional soft chime.
 
 ## Install
 
-Grab a build from [Releases](https://github.com/bednarjosef/vibecheck/releases)
-— AppImage/deb for Linux, dmg for macOS, installer for Windows. Or run from
+One command, any OS (you have npm — you use Claude Code):
+
+```bash
+npm install -g claude-vibecheck
+vibecheck
+```
+
+On first launch it registers itself as a real app — launcher entry on
+Linux, an app bundle in ~/Applications on macOS, a Start Menu shortcut on
+Windows — so from then on you can start it like anything else (and flip on
+**Start at login** in Settings to never think about it again).
+
+Prefer a classic installer? [Releases](https://github.com/bednarjosef/vibecheck/releases)
+has AppImage/deb for Linux, dmg for macOS, and a Windows setup. Or run from
 source:
 
 ```bash
+git clone https://github.com/bednarjosef/vibecheck && cd vibecheck
 npm install
 npm start
 ```

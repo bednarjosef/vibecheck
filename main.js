@@ -6,6 +6,7 @@ const { execFile } = require('child_process');
 const { uIOhook, UiohookKey } = require('uiohook-napi');
 const gnomeShortcut = require('./gnome-shortcut');
 const kdeShortcut = require('./kde-shortcut');
+const { ensureDesktopIntegration } = require('./desktop-integration');
 
 // ── config ──────────────────────────────────────────────────────────
 const DEFAULT_KEY = 'F8';         // change via tray → Shortcut key, or config.json
@@ -591,6 +592,7 @@ if (!app.requestSingleInstanceLock()) {
     startPokeFile();
     calibrateRapidWindow();
     applyAutostart();
+    ensureDesktopIntegration();
     for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) {
       screen.on(ev, positionWindow);
     }

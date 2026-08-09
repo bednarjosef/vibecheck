@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 // Cross-platform launcher. Hardened Linux setups (e.g. Ubuntu 24.04's
 // AppArmor defaults) block both sandbox mechanisms Chromium can use, and it
 // aborts before main.js even runs — so the opt-out has to happen out here on
