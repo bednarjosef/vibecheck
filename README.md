@@ -18,7 +18,7 @@ for a few seconds (and again on recovery), with an optional soft chime.
 One command, any OS (you have npm — you use Claude Code):
 
 ```bash
-npm install -g vibecheck-app
+npm install -g vibe-check
 vibecheck
 ```
 
