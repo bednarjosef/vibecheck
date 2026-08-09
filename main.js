@@ -1,5 +1,5 @@
 // vibecheck — hold a key, see Claude's status. Let go, it melts away.
-const { app, BrowserWindow, Tray, Menu, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, screen, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
@@ -26,29 +26,38 @@ const WATCH = ['Claude Code', 'Claude API'];
 
 const STATUS_URL = 'https://status.claude.com/api/v2/status.json';
 const COMPONENTS_URL = 'https://status.claude.com/api/v2/components.json';
+const INCIDENTS_URL = 'https://status.claude.com/api/v2/incidents/unresolved.json';
 
-// ── shortcut key (persisted in <userData>/config.json) ──────────────
+// ── settings (persisted in <userData>/config.json) ──────────────────
 const KEY_CHOICES = ['F6', 'F7', 'F8', 'F9', 'F10', 'F12', 'ScrollLock', 'Pause'];
 const GNOME_KEYSYM = { ScrollLock: 'Scroll_Lock' }; // where X names differ
 const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
 
-let keyName = DEFAULT_KEY;
+const settings = {
+  key: DEFAULT_KEY,
+  autoReveal: true,  // peek on its own when the status changes
+  sound: false,      // chime on change
+  autostart: false,  // launch at login
+  displayId: null,   // null = primary display
+};
 let holdKey = UiohookKey[DEFAULT_KEY];
 
 function loadConfig() {
   try {
     const c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-    if (typeof c.key === 'string' && UiohookKey[c.key] !== undefined) {
-      keyName = c.key;
-      holdKey = UiohookKey[c.key];
+    if (typeof c.key === 'string' && UiohookKey[c.key] !== undefined) settings.key = c.key;
+    for (const k of ['autoReveal', 'sound', 'autostart']) {
+      if (typeof c[k] === 'boolean') settings[k] = c[k];
     }
-  } catch (_) {} // no config yet, or unreadable — stay on the default
+    if (typeof c.displayId === 'number') settings.displayId = c.displayId;
+  } catch (_) {} // no config yet, or unreadable — stay on the defaults
+  holdKey = UiohookKey[settings.key];
 }
 
 function saveConfig() {
   try {
     fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify({ key: keyName }, null, 2));
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(settings, null, 2));
   } catch (err) {
     console.error('could not save config:', err);
   }
@@ -56,7 +65,7 @@ function saveConfig() {
 
 function installGnomeBinding() {
   return gnomeShortcut.install({
-    binding: GNOME_KEYSYM[keyName] || keyName,
+    binding: GNOME_KEYSYM[settings.key] || settings.key,
     // touching the poke file costs ~10ms per key event, which is what lets
     // tap/hold detection stay snappy (vs ~0.5s app spawns)
     command: `bash -c 'touch "\${XDG_RUNTIME_DIR:-/tmp}/vibecheck-poke"'`,
@@ -64,10 +73,11 @@ function installGnomeBinding() {
 }
 
 async function setKey(name) {
-  keyName = name;
+  if (UiohookKey[name] === undefined) return;
+  settings.key = name;
   holdKey = UiohookKey[name];
   saveConfig();
-  if (tray) tray.setToolTip(`vibecheck — ${keyName}: Claude status`);
+  if (tray) tray.setToolTip(`vibecheck — ${settings.key}: Claude status`);
   try {
     if (gnomeShortcut.isGnome() && (await gnomeShortcut.isInstalled())) {
       await installGnomeBinding(); // rebind the system shortcut too
@@ -75,7 +85,30 @@ async function setKey(name) {
   } catch (err) {
     console.error('could not rebind GNOME shortcut:', err);
   }
-  buildTrayMenu();
+}
+
+function applyAutostart() {
+  if (process.platform === 'linux') {
+    const file = path.join(app.getPath('appData'), 'autostart', 'vibecheck.desktop');
+    try {
+      if (settings.autostart) {
+        const exec = app.isPackaged
+          ? `"${process.execPath}" --no-sandbox`
+          : `"${process.execPath}" "${app.getAppPath()}" --no-sandbox`;
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(
+          file,
+          `[Desktop Entry]\nType=Application\nName=vibecheck\nComment=Claude status overlay\nExec=${exec}\nX-GNOME-Autostart-enabled=true\n`
+        );
+      } else {
+        fs.rmSync(file, { force: true });
+      }
+    } catch (err) {
+      console.error('could not update autostart entry:', err);
+    }
+  } else {
+    app.setLoginItemSettings({ openAtLogin: settings.autostart });
+  }
 }
 
 // worst watched component decides the headline word
@@ -101,10 +134,13 @@ const TRAY_PNG =
 
 let win = null;
 let tray = null;
+let settingsWin = null;
 let holding = false;
 let lastData = null;
 let lastFetched = 0;
 let visible = false;
+let prevIndicator = null;
+let autoPeekTimer = null;
 let burstTimer = null;
 let burstCount = 0;
 let holdStartedAt = 0;
@@ -114,13 +150,41 @@ function show() {
   // always refetch on open — the cached state paints instantly and the live
   // response swaps in a beat later (2s guard so toggle-spam doesn't refetch)
   if (Date.now() - lastFetched > 2_000) fetchStatus();
+  positionWindow(); // monitors may have changed since last time
   if (win && !win.isDestroyed()) win.webContents.send('reveal');
   visible = true;
 }
 
 function hide() {
+  if (autoPeekTimer) {
+    clearTimeout(autoPeekTimer);
+    autoPeekTimer = null;
+  }
   if (win && !win.isDestroyed()) win.webContents.send('conceal');
   visible = false;
+}
+
+// status changed on its own: pop in briefly, then melt away
+function autoPeek(ms) {
+  if (visible) return; // already on screen, the re-render is enough
+  show();
+  autoPeekTimer = setTimeout(() => {
+    autoPeekTimer = null;
+    if (!holding) hide();
+  }, ms);
+}
+
+function positionWindow() {
+  if (!win || win.isDestroyed()) return;
+  const target =
+    screen.getAllDisplays().find((d) => d.id === settings.displayId) ||
+    screen.getPrimaryDisplay();
+  const wa = target.workArea;
+  const [w] = win.getSize();
+  win.setPosition(
+    wa.x + Math.round((wa.width - w) / 2),
+    wa.y + Math.round(wa.height * TOP_FRAC)
+  );
 }
 
 function toggle() {
@@ -226,9 +290,10 @@ function armBurstEnd() {
 
 async function fetchStatus() {
   try {
-    const [statusRes, componentsRes] = await Promise.all([
+    const [statusRes, componentsRes, incidentsRes] = await Promise.all([
       fetch(STATUS_URL).then((r) => r.json()),
       fetch(COMPONENTS_URL).then((r) => r.json()),
+      fetch(INCIDENTS_URL).then((r) => r.json()),
     ]);
     const all = componentsRes.components
       .filter((c) => !c.group)
@@ -243,12 +308,23 @@ async function fetchStatus() {
     const components = (watched.length ? watched : all)
       .slice(0, 8)
       .map((c) => ({ name: c.name, status: c.status }));
+    // prefer the human-written incident title over raw component states —
+    // scoped to the watchlist when one is set
+    const incident =
+      (incidentsRes.incidents || []).find(
+        (i) =>
+          !WATCH.length ||
+          (i.components || []).some((ic) =>
+            WATCH.some((w) => ic.name.toLowerCase().includes(w.toLowerCase()))
+          )
+      ) || null;
     lastData = {
       indicator: watched.length
         ? deriveIndicator(components)
         : statusRes.status.indicator, // none | minor | major | critical
       description: statusRes.status.description,
       components,
+      incident: incident ? { name: incident.name, status: incident.status } : null,
       fetchedAt: Date.now(),
       error: false,
     };
@@ -258,12 +334,24 @@ async function fetchStatus() {
       indicator: 'unknown',
       description: 'Could not reach status.claude.com',
       components: [],
+      incident: null,
       fetchedAt: Date.now(),
       error: true,
     };
     lastFetched = Date.now();
   }
   if (win && !win.isDestroyed()) win.webContents.send('status', lastData);
+
+  // react to changes (ignore network blips in either direction)
+  const prev = prevIndicator;
+  prevIndicator = lastData.indicator;
+  if (prev && prev !== lastData.indicator && prev !== 'unknown' && lastData.indicator !== 'unknown') {
+    const worse = INDICATOR.indexOf(lastData.indicator) > INDICATOR.indexOf(prev);
+    if (settings.sound && win && !win.isDestroyed()) {
+      win.webContents.send('chime', worse ? 'bad' : 'good');
+    }
+    if (settings.autoReveal) autoPeek(worse ? 8_000 : 5_000);
+  }
 }
 
 function createWindow() {
@@ -286,12 +374,7 @@ function createWindow() {
   win.setAlwaysOnTop(true, 'screen-saver');
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   win.setIgnoreMouseEvents(true); // click-through: it's a ghost
-  const wa = screen.getPrimaryDisplay().workArea;
-  const [w] = win.getSize();
-  win.setPosition(
-    wa.x + Math.round((wa.width - w) / 2),
-    wa.y + Math.round(wa.height * TOP_FRAC)
-  );
+  positionWindow();
   win.loadFile('index.html');
   win.webContents.on('did-finish-load', () => {
     if (lastData) win.webContents.send('status', lastData);
@@ -301,44 +384,88 @@ function createWindow() {
 function createTray() {
   const icon = nativeImage.createFromBuffer(Buffer.from(TRAY_PNG, 'base64'));
   tray = new Tray(icon.resize({ width: 16, height: 16 }));
-  tray.setToolTip(`vibecheck — ${keyName}: Claude status`);
+  tray.setToolTip(`vibecheck — ${settings.key}: Claude status`);
   buildTrayMenu();
 }
 
-async function buildTrayMenu() {
-  const template = [
-    { label: 'Show/hide status', click: () => toggle() },
-    { label: 'Refresh now', click: () => fetchStatus() },
-    {
-      label: 'Shortcut key',
-      submenu: KEY_CHOICES.map((k) => ({
-        label: k,
-        type: 'radio',
-        checked: k === keyName,
-        click: () => setKey(k).catch((err) => console.error(err)),
-      })),
-    },
-  ];
-  if (gnomeShortcut.isGnome()) {
-    const installed = await gnomeShortcut.isInstalled();
-    template.push({
-      label: `Bind ${keyName} in GNOME`,
-      type: 'checkbox',
-      checked: installed,
-      click: async () => {
-        try {
-          if (installed) await gnomeShortcut.uninstall();
-          else await installGnomeBinding();
-        } catch (err) {
-          console.error('GNOME shortcut change failed:', err);
-        }
-        buildTrayMenu();
-      },
-    });
-  }
-  template.push({ type: 'separator' }, { label: 'Quit', click: () => app.quit() });
-  tray.setContextMenu(Menu.buildFromTemplate(template));
+function buildTrayMenu() {
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Show/hide status', click: () => toggle() },
+      { label: 'Refresh now', click: () => fetchStatus() },
+      { label: 'Settings…', click: () => openSettings() },
+      { type: 'separator' },
+      { label: 'Quit', click: () => app.quit() },
+    ])
+  );
 }
+
+// ── settings window ─────────────────────────────────────────────────
+function openSettings() {
+  if (settingsWin && !settingsWin.isDestroyed()) {
+    settingsWin.focus();
+    return;
+  }
+  settingsWin = new BrowserWindow({
+    width: 380,
+    height: 475,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    skipTaskbar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'settings-preload.js'),
+      contextIsolation: true,
+    },
+  });
+  settingsWin.loadFile('settings.html');
+  settingsWin.on('closed', () => (settingsWin = null));
+}
+
+ipcMain.handle('settings:get', async () => ({
+  settings,
+  keyChoices: KEY_CHOICES,
+  platform: process.platform,
+  gnome: {
+    available: gnomeShortcut.isGnome(),
+    installed: gnomeShortcut.isGnome() ? await gnomeShortcut.isInstalled() : false,
+  },
+  displays: screen.getAllDisplays().map((d) => ({
+    id: d.id,
+    label:
+      `${d.label || 'Display'} — ${d.size.width}×${d.size.height}` +
+      (d.id === screen.getPrimaryDisplay().id ? ' (primary)' : ''),
+  })),
+}));
+
+ipcMain.handle('settings:set', async (_e, patch) => {
+  if (typeof patch !== 'object' || !patch) return false;
+  if ('key' in patch) await setKey(String(patch.key));
+  if ('autoReveal' in patch) settings.autoReveal = !!patch.autoReveal;
+  if ('sound' in patch) settings.sound = !!patch.sound;
+  if ('autostart' in patch) {
+    settings.autostart = !!patch.autostart;
+    applyAutostart();
+  }
+  if ('displayId' in patch) {
+    settings.displayId = typeof patch.displayId === 'number' ? patch.displayId : null;
+    positionWindow();
+  }
+  if ('gnomeBind' in patch) {
+    try {
+      if (patch.gnomeBind) await installGnomeBinding();
+      else await gnomeShortcut.uninstall();
+    } catch (err) {
+      console.error('GNOME shortcut change failed:', err);
+    }
+  }
+  saveConfig();
+  return true;
+});
+
+ipcMain.on('settings:close', () => {
+  if (settingsWin && !settingsWin.isDestroyed()) settingsWin.close();
+});
 
 // widen the rapid window for people who slowed their key repeat down
 function calibrateRapidWindow() {
@@ -401,6 +528,10 @@ if (!app.requestSingleInstanceLock()) {
     startHook();
     startPokeFile();
     calibrateRapidWindow();
+    applyAutostart();
+    for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) {
+      screen.on(ev, positionWindow);
+    }
     fetchStatus();
     setInterval(fetchStatus, POLL_MS);
   });

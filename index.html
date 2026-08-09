@@ -93,7 +93,8 @@
     white-space: nowrap;
   }
 
-  /* affected components, inline — the dots carry per-component severity */
+  /* incident title (or affected components), inline — the dots carry
+     per-component severity */
   #affected {
     display: none;
     font-size: 11.5px;
@@ -101,6 +102,9 @@
     text-transform: uppercase;
     color: var(--dim);
     white-space: nowrap;
+    max-width: 420px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   #affected.has { display: inline; }
@@ -157,15 +161,42 @@
     }
 
     const bad = data.components.filter((c) => c.status !== 'operational');
-    affectedEl.textContent = bad.length
-      ? '· ' + bad.map((c) => c.name.replace(/\s*\(.*?\)/, '')).join(' + ')
-      : '';
-    affectedEl.classList.toggle('has', bad.length > 0);
+    if (data.incident && data.indicator !== 'none') {
+      // the human-written incident title beats raw component states
+      affectedEl.textContent = '· ' + data.incident.name;
+      affectedEl.classList.add('has');
+    } else {
+      affectedEl.textContent = bad.length
+        ? '· ' + bad.map((c) => c.name.replace(/\s*\(.*?\)/, '')).join(' + ')
+        : '';
+      affectedEl.classList.toggle('has', bad.length > 0);
+    }
+  }
+
+  // soft two-note chime: down for bad news, up for recovery
+  function chime(kind) {
+    const ctx = new AudioContext();
+    const t0 = ctx.currentTime;
+    const freqs = kind === 'good' ? [660, 880] : [523, 392];
+    freqs.forEach((f, i) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = f;
+      g.gain.setValueAtTime(0, t0 + i * 0.14);
+      g.gain.linearRampToValueAtTime(0.07, t0 + i * 0.14 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.14 + 0.5);
+      o.connect(g).connect(ctx.destination);
+      o.start(t0 + i * 0.14);
+      o.stop(t0 + i * 0.14 + 0.55);
+    });
+    setTimeout(() => ctx.close(), 1500);
   }
 
   window.vibecheck.onStatus(render);
   window.vibecheck.onReveal(() => panel.classList.add('on'));
   window.vibecheck.onConceal(() => panel.classList.remove('on'));
+  window.vibecheck.onChime(chime);
 </script>
 </body>
 </html>

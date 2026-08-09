@@ -1,0 +1,193 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  :root {
+    --ok: #3ecf8e;
+    --ink: #e8ebef;
+    --dim: #8b93a1;
+    --faint: #565d68;
+    --coral: #d97757;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    background: transparent;
+    overflow: hidden;
+    font-family: "SF Mono", ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    height: 100%;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+  }
+
+  #panel {
+    position: absolute;
+    inset: 8px;
+    display: flex;
+    flex-direction: column;
+    border-radius: 16px;
+    background: rgba(15, 17, 21, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+    overflow: hidden;
+  }
+
+  header {
+    -webkit-app-region: drag;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 18px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  header .t { font-size: 12px; letter-spacing: 0.16em; color: var(--dim); }
+  header .t b { color: var(--ink); font-weight: 600; }
+
+  #close {
+    -webkit-app-region: no-drag;
+    width: 24px; height: 24px;
+    border: none; border-radius: 7px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--dim);
+    font: inherit; font-size: 13px;
+    cursor: pointer;
+  }
+  #close:hover { background: rgba(240, 85, 77, 0.25); color: var(--ink); }
+
+  main { padding: 8px 18px 16px; display: flex; flex-direction: column; }
+
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+  }
+  .row:last-child { border-bottom: none; }
+
+  .lbl { font-size: 12.5px; color: var(--ink); }
+  .sub { margin-top: 3px; font-size: 10.5px; color: var(--faint); line-height: 1.5; }
+
+  select {
+    -webkit-app-region: no-drag;
+    max-width: 170px;
+    background: #1b1f26;
+    color: var(--ink);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 6px 8px;
+    font: inherit; font-size: 12px;
+    outline: none;
+  }
+
+  input[type="checkbox"] {
+    -webkit-app-region: no-drag;
+    appearance: none;
+    width: 38px; height: 22px;
+    border-radius: 11px;
+    background: #2a2f38;
+    position: relative;
+    cursor: pointer;
+    flex: none;
+    transition: background 140ms ease;
+  }
+  input[type="checkbox"]::after {
+    content: '';
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: #8b93a1;
+    transition: transform 140ms ease, background 140ms ease;
+  }
+  input[type="checkbox"]:checked { background: rgba(62, 207, 142, 0.35); }
+  input[type="checkbox"]:checked::after { transform: translateX(16px); background: var(--ok); }
+
+  footer {
+    margin-top: auto;
+    padding: 10px 18px 14px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--faint);
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+  <div id="panel">
+    <header>
+      <span class="t"><b>vibecheck</b> · SETTINGS</span>
+      <button id="close" title="Close">&#10005;</button>
+    </header>
+    <main>
+      <div class="row">
+        <div><div class="lbl">Shortcut key</div><div class="sub">tap toggles · hold peeks</div></div>
+        <select id="key"></select>
+      </div>
+      <div class="row" id="gnome-row" hidden>
+        <div><div class="lbl">System-wide key (GNOME)</div><div class="sub">works in native Wayland apps too</div></div>
+        <input type="checkbox" id="gnomeBind" />
+      </div>
+      <div class="row">
+        <div><div class="lbl">Auto-reveal on change</div><div class="sub">peeks when status flips, and on recovery</div></div>
+        <input type="checkbox" id="autoReveal" />
+      </div>
+      <div class="row">
+        <div><div class="lbl">Sound on change</div><div class="sub">soft chime — down and back up</div></div>
+        <input type="checkbox" id="sound" />
+      </div>
+      <div class="row">
+        <div><div class="lbl">Start at login</div></div>
+        <input type="checkbox" id="autostart" />
+      </div>
+      <div class="row">
+        <div><div class="lbl">Display</div><div class="sub">where the pill appears</div></div>
+        <select id="display"></select>
+      </div>
+    </main>
+    <footer>DATA · STATUS.CLAUDE.COM</footer>
+  </div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  async function init() {
+    const s = await window.vc.getState();
+
+    $('key').innerHTML = s.keyChoices
+      .map((k) => `<option value="${k}"${k === s.settings.key ? ' selected' : ''}>${k}</option>`)
+      .join('');
+
+    const opts = [`<option value="">Primary</option>`].concat(
+      s.displays.map(
+        (d) => `<option value="${d.id}"${d.id === s.settings.displayId ? ' selected' : ''}>${d.label}</option>`
+      )
+    );
+    $('display').innerHTML = opts.join('');
+
+    if (s.gnome.available) {
+      $('gnome-row').hidden = false;
+      $('gnomeBind').checked = s.gnome.installed;
+    }
+    $('autoReveal').checked = s.settings.autoReveal;
+    $('sound').checked = s.settings.sound;
+    $('autostart').checked = s.settings.autostart;
+  }
+
+  $('key').addEventListener('change', (e) => window.vc.set({ key: e.target.value }));
+  $('display').addEventListener('change', (e) =>
+    window.vc.set({ displayId: e.target.value === '' ? null : Number(e.target.value) })
+  );
+  for (const id of ['gnomeBind', 'autoReveal', 'sound', 'autostart']) {
+    $(id).addEventListener('change', (e) => window.vc.set({ [id]: e.target.checked }));
+  }
+  $('close').addEventListener('click', () => window.vc.close());
+
+  init();
+</script>
+</body>
+</html>

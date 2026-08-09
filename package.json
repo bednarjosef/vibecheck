@@ -4,13 +4,49 @@
   "description": "Hold a key, see Claude's status. Let go, it melts away.",
   "main": "main.js",
   "scripts": {
-    "start": "node launch.js"
+    "start": "node launch.js",
+    "dist": "electron-builder"
   },
   "license": "MIT",
+  "author": {
+    "name": "Josef Bednar",
+    "email": "osobni@josefbednar.com"
+  },
+  "build": {
+    "appId": "com.bednarjosef.vibecheck",
+    "productName": "vibecheck",
+    "files": [
+      "main.js",
+      "preload.js",
+      "settings-preload.js",
+      "index.html",
+      "settings.html",
+      "gnome-shortcut.js",
+      "launch.js"
+    ],
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Utility",
+      "synopsis": "Tap a key, see Claude's live status"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "target": ["nsis"]
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "bednarjosef",
+      "repo": "vibecheck"
+    }
+  },
   "dependencies": {
     "uiohook-napi": "^1.5.4"
   },
   "devDependencies": {
-    "electron": "^31.0.0"
+    "electron": "^31.0.0",
+    "electron-builder": "^26.15.3"
   }
 }

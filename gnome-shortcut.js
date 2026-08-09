@@ -24,10 +24,13 @@ function gvariantString(s) {
 }
 
 function isGnome() {
-  return (
-    process.platform === 'linux' &&
-    /gnome/i.test(process.env.XDG_CURRENT_DESKTOP || '')
-  );
+  // Chromium rewrites XDG_CURRENT_DESKTOP (ubuntu:GNOME → Unity) inside
+  // Electron and stashes the real value in ORIGINAL_XDG_CURRENT_DESKTOP
+  const desktop =
+    process.env.ORIGINAL_XDG_CURRENT_DESKTOP ||
+    process.env.XDG_CURRENT_DESKTOP ||
+    '';
+  return process.platform === 'linux' && /gnome/i.test(desktop);
 }
 
 async function getList() {
