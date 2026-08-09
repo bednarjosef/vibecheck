@@ -15,6 +15,7 @@
   "build": {
     "appId": "com.bednarjosef.vibecheck",
     "productName": "vibecheck",
+    "npmRebuild": false,
     "files": [
       "main.js",
       "preload.js",
