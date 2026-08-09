@@ -61,6 +61,17 @@
     to   { opacity: 1; transform: translateY(0) scale(1); }
   }
 
+  /* departure with anticipation: a tiny crouch, then launch up and away */
+  #panel.out {
+    animation: panel-out 250ms both;
+  }
+
+  @keyframes panel-out {
+    0%   { opacity: 1; transform: translateY(0) scale(1); animation-timing-function: ease-out; }
+    24%  { opacity: 1; transform: translateY(3.5px) scale(1.012); animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0.6); }
+    100% { opacity: 0; transform: translateY(-32px) scale(0.94); }
+  }
+
   /* ── ambient light (settings → Ambient light) ─────────────────────
      glow-border: a shimmer of the status color drifting along the pill's
      own hairline border. glow-bottom: a small lamp on the bottom edge that
@@ -209,6 +220,7 @@
   @media (prefers-reduced-motion: reduce) {
     #panel { transition: opacity 120ms linear; transform: none; }
     #panel.on { animation: none; }
+    #panel.out { animation: none; }
     #panel.on.glow-border::before { animation: none; opacity: 0.8; }
     #panel.on.glow-bottom::before { animation: none; opacity: 0.8; }
     #panel.on.glow-bottom::after { animation: none; opacity: 0; }
@@ -385,8 +397,15 @@
   }
 
   window.vibecheck.onStatus(render);
-  window.vibecheck.onReveal(() => panel.classList.add('on'));
-  window.vibecheck.onConceal(() => panel.classList.remove('on'));
+  window.vibecheck.onReveal(() => {
+    panel.classList.remove('out');
+    panel.classList.add('on');
+  });
+  window.vibecheck.onConceal(() => {
+    if (!panel.classList.contains('on')) return;
+    panel.classList.remove('on');
+    panel.classList.add('out');
+  });
   window.vibecheck.onChime(chime);
   window.vibecheck.onGlow((style) => {
     panel.classList.remove('glow-border', 'glow-bottom');
