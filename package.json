@@ -52,6 +52,9 @@
       "owner": "bednarjosef",
       "repo": "vibecheck",
       "releaseType": "release"
+    },
+    "deb": {
+      "artifactName": "vibecheck_${version}_${arch}.${ext}"
     }
   },
   "dependencies": {
