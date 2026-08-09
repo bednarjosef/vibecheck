@@ -129,9 +129,9 @@
   #panel.glow-bottom::after {
     content: '';
     position: absolute;
-    inset: -2px;
-    border-radius: 18px;
-    padding: 2px;
+    inset: -1.5px;
+    border-radius: 17.5px;
+    padding: 1.5px;
     mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     mask-composite: exclude;
     opacity: 0;
@@ -154,21 +154,25 @@
   }
 
   #panel.on.glow-bottom::after {
-    animation: ring-intro 1250ms linear both;
+    animation: ring-intro 1400ms linear both;
   }
 
+  /* draw the full ring, retract until only the bottom arc the lamp will
+     occupy remains (±72° ≈ the lens's 150px at this pill height), then
+     that remnant melts in place as the lens blooms under it */
   @keyframes ring-intro {
     0%   { --trace: 0deg;   --erase: 0deg;   opacity: 1; }
     56%  { --trace: 180deg; --erase: 0deg;   opacity: 1; }
-    100% { --trace: 180deg; --erase: 180deg; opacity: 1; }
+    92%  { --trace: 180deg; --erase: 108deg; opacity: 1; }
+    100% { --trace: 180deg; --erase: 108deg; opacity: 0; }
   }
 
   #panel.on.glow-bottom::before {
     opacity: 1;
     animation:
-      lamp-stretch 7.1s ease-in-out 720ms infinite,
-      lamp-breathe 5.3s ease-in-out 720ms infinite,
-      lamp-in 500ms ease 720ms both;
+      lamp-stretch 7.1s ease-in-out 1150ms infinite,
+      lamp-breathe 5.3s ease-in-out 1150ms infinite,
+      lamp-in 350ms ease 1150ms both;
   }
 
   /* fades the lens in right as the traced ring dissolves */
