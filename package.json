@@ -1,0 +1,16 @@
+{
+  "name": "vibecheck",
+  "version": "1.0.0",
+  "description": "Hold a key, see Claude's status. Let go, it melts away.",
+  "main": "main.js",
+  "scripts": {
+    "start": "node launch.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "uiohook-napi": "^1.5.4"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0"
+  }
+}

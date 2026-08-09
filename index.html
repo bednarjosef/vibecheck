@@ -1,0 +1,171 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  :root {
+    --ok: #3ecf8e;
+    --minor: #f5c542;
+    --major: #f08a3c;
+    --critical: #f0554d;
+    --unknown: #8b93a1;
+    --ink: #e8ebef;
+    --dim: #9aa2ad;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    background: transparent;
+    overflow: hidden;
+    font-family: "SF Mono", ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    height: 100%;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    cursor: default;
+  }
+
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 6px;
+  }
+
+  #panel {
+    display: inline-flex;
+    flex-direction: column;
+    padding: 10px 18px 10px 15px;
+    border-radius: 16px;
+    background: rgba(15, 17, 21, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    box-shadow: 0 10px 36px rgba(0, 0, 0, 0.45);
+
+    opacity: 0;
+    transform: translateY(-14px);
+    /* exit: quicker than entry — it should snap away */
+    transition:
+      opacity 110ms cubic-bezier(0.3, 0, 0.2, 1),
+      transform 110ms cubic-bezier(0.3, 0, 0.2, 1);
+  }
+
+  #panel.on {
+    opacity: 1;
+    transform: translateY(0);
+    transition-duration: 150ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #panel { transition: opacity 120ms linear; transform: none; }
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* the Claude spark — static, just a soft breathing pulse */
+  #spark {
+    flex: none;
+    width: 17px; height: 17px;
+    color: #d97757;
+    animation: breathe 2.6s ease-in-out infinite;
+  }
+
+  #spark svg { display: block; width: 100%; height: 100%; }
+
+  @keyframes breathe {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #spark { animation: none; }
+  }
+
+  #word {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--status-color, var(--unknown));
+    white-space: nowrap;
+  }
+
+  /* affected components, inline — the dots carry per-component severity */
+  #affected {
+    display: none;
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dim);
+    white-space: nowrap;
+  }
+
+  #affected.has { display: inline; }
+
+  #mini {
+    display: flex;
+    gap: 5px;
+    margin-left: 6px;
+  }
+
+  .m { width: 5px; height: 5px; border-radius: 50%; }
+  .m.operational { background: var(--ok); opacity: 0.75; }
+  .m.degraded_performance { background: var(--minor); }
+  .m.partial_outage { background: var(--major); }
+  .m.major_outage { background: var(--critical); }
+  .m.under_maintenance { background: var(--unknown); }
+
+</style>
+</head>
+<body>
+  <div id="panel">
+    <div class="row">
+      <span id="spark"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg></span>
+      <span id="word">Checking&hellip;</span>
+      <span id="affected"></span>
+      <span id="mini"></span>
+    </div>
+  </div>
+
+<script>
+  const WORDS = {
+    none:     { word: 'All systems go', color: 'var(--ok)' },
+    minor:    { word: 'Minor issues',   color: 'var(--minor)' },
+    major:    { word: 'Partial outage', color: 'var(--major)' },
+    critical: { word: 'Major outage',   color: 'var(--critical)' },
+    unknown:  { word: 'Unreachable',    color: 'var(--unknown)' },
+  };
+
+  const panel = document.getElementById('panel');
+  const wordEl = document.getElementById('word');
+  const miniEl = document.getElementById('mini');
+  const affectedEl = document.getElementById('affected');
+
+  function render(data) {
+    const s = WORDS[data.indicator] || WORDS.unknown;
+    panel.style.setProperty('--status-color', s.color);
+    wordEl.textContent = s.word;
+
+    miniEl.innerHTML = '';
+    for (const c of data.components) {
+      const dot = document.createElement('i');
+      dot.className = 'm ' + c.status;
+      miniEl.append(dot);
+    }
+
+    const bad = data.components.filter((c) => c.status !== 'operational');
+    affectedEl.textContent = bad.length
+      ? '· ' + bad.map((c) => c.name.replace(/\s*\(.*?\)/, '')).join(' + ')
+      : '';
+    affectedEl.classList.toggle('has', bad.length > 0);
+  }
+
+  window.vibecheck.onStatus(render);
+  window.vibecheck.onReveal(() => panel.classList.add('on'));
+  window.vibecheck.onConceal(() => panel.classList.remove('on'));
+</script>
+</body>
+</html>
