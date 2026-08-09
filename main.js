@@ -35,14 +35,16 @@ const GNOME_KEYSYM = { ScrollLock: 'Scroll_Lock' }; // where X names differ
 const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
 
 const GLOW_STYLES = ['bottom', 'border', 'off'];
+const SOUND_THEMES = ['bells', 'pluck', 'kalimba', 'crystal', 'bubble'];
 
 const settings = {
   key: DEFAULT_KEY,
-  autoReveal: true,  // peek on its own when the status changes
-  sound: false,      // chime on change
-  autostart: false,  // launch at login
-  displayId: null,   // null = primary display
-  glow: 'bottom',    // ambient light: bottom | border | off
+  autoReveal: true,      // peek on its own when the status changes
+  sound: false,          // chime on change
+  soundTheme: 'bells',   // which voice the chimes use
+  autostart: false,      // launch at login
+  displayId: null,       // null = primary display
+  glow: 'bottom',        // ambient light: bottom | border | off
 };
 let holdKey = UiohookKey[DEFAULT_KEY];
 
@@ -55,8 +57,13 @@ function loadConfig() {
     }
     if (typeof c.displayId === 'number') settings.displayId = c.displayId;
     if (GLOW_STYLES.includes(c.glow)) settings.glow = c.glow;
+    if (SOUND_THEMES.includes(c.soundTheme)) settings.soundTheme = c.soundTheme;
   } catch (_) {} // no config yet, or unreadable — stay on the defaults
   holdKey = UiohookKey[settings.key];
+}
+
+function sendChime(kind) {
+  if (win && !win.isDestroyed()) win.webContents.send('chime', kind, settings.soundTheme);
 }
 
 function sendGlow() {
@@ -185,7 +192,7 @@ function show(quiet = false) {
   positionWindow(); // monitors may have changed since last time
   if (win && !win.isDestroyed()) {
     win.webContents.send('reveal');
-    if (!quiet && settings.sound) win.webContents.send('chime', 'open');
+    if (!quiet && settings.sound) sendChime('open');
   }
   visible = true;
 }
@@ -197,7 +204,7 @@ function hide(quiet = false) {
   }
   if (win && !win.isDestroyed()) {
     win.webContents.send('conceal');
-    if (!quiet && settings.sound) win.webContents.send('chime', 'close');
+    if (!quiet && settings.sound) sendChime('close');
   }
   visible = false;
 }
@@ -388,9 +395,7 @@ async function fetchStatus() {
   prevIndicator = lastData.indicator;
   if (prev && prev !== lastData.indicator && prev !== 'unknown' && lastData.indicator !== 'unknown') {
     const worse = INDICATOR.indexOf(lastData.indicator) > INDICATOR.indexOf(prev);
-    if (settings.sound && win && !win.isDestroyed()) {
-      win.webContents.send('chime', worse ? 'bad' : 'good');
-    }
+    if (settings.sound) sendChime(worse ? 'bad' : 'good');
     if (settings.autoReveal) autoPeek(worse ? 8_000 : 5_000);
   }
 }
@@ -450,7 +455,7 @@ function openSettings() {
   }
   settingsWin = new BrowserWindow({
     width: 430,
-    height: 595,
+    height: 650,
     frame: false,
     transparent: true,
     resizable: false,
@@ -500,6 +505,10 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('glow' in patch && GLOW_STYLES.includes(patch.glow)) {
     settings.glow = patch.glow;
     sendGlow();
+  }
+  if ('soundTheme' in patch && SOUND_THEMES.includes(patch.soundTheme)) {
+    settings.soundTheme = patch.soundTheme;
+    sendChime('open'); // instant preview
   }
   if ('systemBind' in patch) {
     try {

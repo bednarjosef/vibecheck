@@ -141,6 +141,16 @@
         <input type="checkbox" id="sound" />
       </div>
       <div class="row">
+        <div><div class="lbl">Sound theme</div><div class="sub">changing it plays a preview</div></div>
+        <select id="soundTheme">
+          <option value="bells">Bells</option>
+          <option value="pluck">Noteblock</option>
+          <option value="kalimba">Kalimba</option>
+          <option value="crystal">Crystal</option>
+          <option value="bubble">Bubble</option>
+        </select>
+      </div>
+      <div class="row">
         <div><div class="lbl">Start at login</div></div>
         <input type="checkbox" id="autostart" />
       </div>
@@ -188,6 +198,7 @@
     $('sound').checked = s.settings.sound;
     $('autostart').checked = s.settings.autostart;
     $('glow').value = s.settings.glow;
+    $('soundTheme').value = s.settings.soundTheme;
   }
 
   $('key').addEventListener('change', (e) => window.vc.set({ key: e.target.value }));
@@ -195,6 +206,7 @@
     window.vc.set({ displayId: e.target.value === '' ? null : Number(e.target.value) })
   );
   $('glow').addEventListener('change', (e) => window.vc.set({ glow: e.target.value }));
+  $('soundTheme').addEventListener('change', (e) => window.vc.set({ soundTheme: e.target.value }));
   for (const id of ['systemBind', 'autoReveal', 'sound', 'autostart']) {
     $(id).addEventListener('change', (e) => window.vc.set({ [id]: e.target.checked }));
   }
