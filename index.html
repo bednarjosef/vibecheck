@@ -154,7 +154,7 @@
   }
 
   #panel.on.glow-bottom::after {
-    animation: ring-intro 1600ms linear both;
+    animation: ring-intro 1000ms linear both;
   }
 
   /* draw the full ring, retract until only the bottom arc the lamp will
@@ -165,18 +165,18 @@
      and stutter across the last stretch of the bottom edge. */
   @keyframes ring-intro {
     0%   { --trace: 0deg;   --erase: 0deg;   opacity: 1; animation-timing-function: linear; }
-    49%  { --trace: 180deg; --erase: 0deg;   opacity: 1; animation-timing-function: ease-in; }
-    63%  { --trace: 180deg; --erase: 62deg;  opacity: 1; animation-timing-function: ease-out; }
-    82%  { --trace: 180deg; --erase: 112deg; opacity: 1; animation-timing-function: ease-out; }
+    46%  { --trace: 180deg; --erase: 0deg;   opacity: 1; animation-timing-function: ease-in; }
+    60%  { --trace: 180deg; --erase: 62deg;  opacity: 1; animation-timing-function: ease-out; }
+    81%  { --trace: 180deg; --erase: 112deg; opacity: 1; animation-timing-function: ease-out; }
     100% { --trace: 180deg; --erase: 126deg; opacity: 0; }
   }
 
   #panel.on.glow-bottom::before {
     opacity: 1;
     animation:
-      lamp-stretch 7.1s ease-in-out 1120ms infinite,
-      lamp-breathe 5.3s ease-in-out 1120ms infinite,
-      lamp-in 420ms ease 1120ms both;
+      lamp-stretch 7.1s ease-in-out 700ms infinite,
+      lamp-breathe 5.3s ease-in-out 700ms infinite,
+      lamp-in 300ms ease 700ms both;
   }
 
   /* fades the lens in right as the traced ring dissolves */
