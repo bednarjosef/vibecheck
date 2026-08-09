@@ -212,9 +212,11 @@ function positionWindow() {
     screen.getPrimaryDisplay();
   const wa = target.workArea;
   const [w] = win.getSize();
+  // the page has 30px of glow headroom above the pill — compensate so the
+  // pill itself sits at TOP_FRAC
   win.setPosition(
     wa.x + Math.round((wa.width - w) / 2),
-    wa.y + Math.round(wa.height * TOP_FRAC)
+    Math.max(wa.y, wa.y + Math.round(wa.height * TOP_FRAC) - 24)
   );
 }
 
