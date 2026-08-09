@@ -72,6 +72,12 @@
   .lbl { font-size: 12.5px; color: var(--ink); }
   .sub { margin-top: 3px; font-size: 10.5px; color: var(--faint); line-height: 1.5; }
 
+  .pair { display: flex; gap: 6px; flex: none; }
+  .pair select { max-width: none; }
+  #wrDay { width: 118px; }
+  #wrHour { width: 78px; }
+  select:disabled { opacity: 0.45; }
+
   select {
     -webkit-app-region: no-drag;
     max-width: 170px;
@@ -150,6 +156,26 @@
         </select>
       </div>
       <div class="row">
+        <div><div class="lbl">Show usage</div><div class="sub">session + week tokens from Claude Code's local logs</div></div>
+        <input type="checkbox" id="usage" />
+      </div>
+      <div class="row">
+        <div><div class="lbl">Weekly reset</div><div class="sub">set it to match /usage in Claude Code</div></div>
+        <div class="pair">
+          <select id="wrDay">
+            <option value="">Rolling</option>
+            <option value="1">Monday</option>
+            <option value="2">Tuesday</option>
+            <option value="3">Wednesday</option>
+            <option value="4">Thursday</option>
+            <option value="5">Friday</option>
+            <option value="6">Saturday</option>
+            <option value="0">Sunday</option>
+          </select>
+          <select id="wrHour"></select>
+        </div>
+      </div>
+      <div class="row">
         <div><div class="lbl">Start at login</div></div>
         <input type="checkbox" id="autostart" />
       </div>
@@ -198,6 +224,16 @@
     $('autostart').checked = s.settings.autostart;
     $('glow').value = s.settings.glow;
     $('soundTheme').value = s.settings.soundTheme;
+    $('usage').checked = s.settings.usage;
+
+    $('wrHour').innerHTML = Array.from(
+      { length: 24 },
+      (_, h) => `<option value="${h}">${String(h).padStart(2, '0')}:00</option>`
+    ).join('');
+    const wr = s.settings.weeklyReset;
+    $('wrDay').value = wr ? String(wr.day) : '';
+    $('wrHour').value = String(wr ? wr.hour : 17);
+    $('wrHour').disabled = !wr;
   }
 
   $('key').addEventListener('change', (e) => window.vc.set({ key: e.target.value }));
@@ -206,9 +242,19 @@
   );
   $('glow').addEventListener('change', (e) => window.vc.set({ glow: e.target.value }));
   $('soundTheme').addEventListener('change', (e) => window.vc.set({ soundTheme: e.target.value }));
-  for (const id of ['systemBind', 'autoReveal', 'sound', 'autostart']) {
+  for (const id of ['systemBind', 'autoReveal', 'sound', 'autostart', 'usage']) {
     $(id).addEventListener('change', (e) => window.vc.set({ [id]: e.target.checked }));
   }
+  function sendWeeklyReset() {
+    const day = $('wrDay').value;
+    $('wrHour').disabled = day === '';
+    window.vc.set({
+      weeklyReset:
+        day === '' ? null : { day: Number(day), hour: Number($('wrHour').value) },
+    });
+  }
+  $('wrDay').addEventListener('change', sendWeeklyReset);
+  $('wrHour').addEventListener('change', sendWeeklyReset);
   $('close').addEventListener('click', () => window.vc.close());
 
   init();

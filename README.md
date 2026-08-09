@@ -59,6 +59,11 @@ Tray → **Settings…** opens a small panel:
   flips, and again when it recovers
 - **Sound on change** — a soft two-note chime, down for bad news, up for
   recovery (off by default)
+- **Show usage** — appends your own Claude Code usage to the pill:
+  `SESSION 910K · WEEK 25M`, current 5-hour window and week
+- **Weekly reset** — anchor the weekly number to your plan's actual reset
+  moment (copy it from `/usage` in Claude Code); unset, it's a rolling
+  7-day total
 - **Start at login**
 - **Ambient light** — a living glow in the status color: *Underglow* (a
   lamp wandering the bottom edge, casting light downward), *Border
@@ -85,6 +90,27 @@ worst status among watched components — an unrelated claude.ai hiccup won't
 bother you — and unresolved incidents are matched against the same watchlist.
 Edit `WATCH` at the top of `main.js` to change it; empty list mirrors the
 whole status page.
+
+## Usage in the pill
+
+If you use Claude Code, the pill can also carry your own numbers — how many
+tokens the current 5-hour session and the last week have burned (they're in
+the tray menu too, with reset times). This is read **entirely from Claude
+Code's local transcripts** (`~/.claude/projects/**/*.jsonl`), where every
+response records its exact token counts: nothing leaves your machine, no
+account access, no extra login.
+
+Honest fine print:
+
+- Counts are input + output + freshly cached context. Cache *re-reads* are
+  excluded — they're 98%+ of raw volume but nearly free, and would drown
+  the signal.
+- Session boundaries are reconstructed from timestamps (first message after
+  a lapse opens a 5-hour window, anchored to the hour) — the same
+  approximation ccusage uses, usually matching `/usage` to the minute.
+- It only sees Claude Code on this machine — claude.ai chats and other
+  devices don't appear, and official limit percentages aren't published,
+  so it shows real tokens rather than a made-up percent.
 
 ## Platform notes
 

@@ -25,7 +25,8 @@
       "gnome-shortcut.js",
       "kde-shortcut.js",
       "desktop-integration.js",
-      "launch.js"
+      "launch.js",
+      "usage.js"
     ],
     "linux": {
       "target": [
@@ -78,6 +79,7 @@
     "kde-shortcut.js",
     "desktop-integration.js",
     "launch.js",
+    "usage.js",
     "build/icon.png",
     "build/icon.icns",
     "build/icon.ico",

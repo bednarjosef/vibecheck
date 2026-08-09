@@ -7,6 +7,7 @@ const { uIOhook, UiohookKey } = require('uiohook-napi');
 const gnomeShortcut = require('./gnome-shortcut');
 const kdeShortcut = require('./kde-shortcut');
 const { ensureDesktopIntegration } = require('./desktop-integration');
+const usage = require('./usage');
 
 // ── config ──────────────────────────────────────────────────────────
 const DEFAULT_KEY = 'F8';         // change via tray → Shortcut key, or config.json
@@ -46,6 +47,8 @@ const settings = {
   autostart: false,      // launch at login
   displayId: null,       // null = primary display
   glow: 'bottom',        // ambient light: bottom | border | off
+  usage: true,           // show Claude Code usage (from its local transcripts)
+  weeklyReset: null,     // { day: 0-6 Sun-Sat, hour: 0-23 } or null = rolling 7 days
 };
 let holdKey = UiohookKey[DEFAULT_KEY];
 
@@ -59,6 +62,14 @@ function loadConfig() {
     if (typeof c.displayId === 'number') settings.displayId = c.displayId;
     if (GLOW_STYLES.includes(c.glow)) settings.glow = c.glow;
     if (SOUND_THEMES.includes(c.soundTheme)) settings.soundTheme = c.soundTheme;
+    if (typeof c.usage === 'boolean') settings.usage = c.usage;
+    if (
+      c.weeklyReset &&
+      Number.isInteger(c.weeklyReset.day) && c.weeklyReset.day >= 0 && c.weeklyReset.day <= 6 &&
+      Number.isInteger(c.weeklyReset.hour) && c.weeklyReset.hour >= 0 && c.weeklyReset.hour <= 23
+    ) {
+      settings.weeklyReset = { day: c.weeklyReset.day, hour: c.weeklyReset.hour };
+    }
   } catch (_) {} // no config yet, or unreadable — stay on the defaults
   holdKey = UiohookKey[settings.key];
 }
@@ -186,10 +197,39 @@ let burstCount = 0;
 let holdStartedAt = 0;
 let suppressKeyup = false;
 
+// tokens read well at three digits max: 812 → 45k → 1.2M → 38M → 1.2B
+function fmtTokens(n) {
+  if (n >= 1e9) return (n >= 1e10 ? Math.round(n / 1e9) : parseFloat((n / 1e9).toFixed(1))) + 'B';
+  if (n >= 1e6) return (n >= 1e7 ? Math.round(n / 1e6) : parseFloat((n / 1e6).toFixed(1))) + 'M';
+  if (n >= 1000) return Math.round(n / 1000) + 'k';
+  return String(n);
+}
+
+let lastUsageSent = '';
+
+function sendUsage() {
+  const data = settings.usage ? usage.summary(settings.weeklyReset) : null;
+  if (win && !win.isDestroyed()) win.webContents.send('usage', data);
+  const key = JSON.stringify(data);
+  if (key !== lastUsageSent) {
+    lastUsageSent = key;
+    if (tray) buildTrayMenu(); // usage lines live in the tray menu too
+  }
+}
+
+function refreshUsage() {
+  if (!settings.usage) {
+    sendUsage();
+    return;
+  }
+  usage.refresh().then(sendUsage);
+}
+
 function show(quiet = false) {
   // always refetch on open — the cached state paints instantly and the live
   // response swaps in a beat later (2s guard so toggle-spam doesn't refetch)
   if (Date.now() - lastFetched > 2_000) fetchStatus();
+  refreshUsage();
   positionWindow(); // monitors may have changed since last time
   if (win && !win.isDestroyed()) {
     win.webContents.send('reveal');
@@ -426,6 +466,7 @@ function createWindow() {
   win.webContents.on('did-finish-load', () => {
     if (lastData) win.webContents.send('status', lastData);
     sendGlow();
+    refreshUsage(); // waits out any in-flight scan — never paints partial numbers
   });
 }
 
@@ -439,9 +480,31 @@ function createTray() {
 function buildTrayMenu() {
   const template = [
     { label: 'Show/hide status', click: () => toggle() },
-    { label: 'Refresh now', click: () => fetchStatus() },
+    { label: 'Refresh now', click: () => { fetchStatus(); refreshUsage(); } },
     { label: 'Settings…', click: () => openSettings() },
   ];
+  const u = settings.usage ? usage.summary(settings.weeklyReset) : null;
+  if (u) {
+    const time = (ts) =>
+      new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dayTime = (ts) =>
+      new Date(ts).toLocaleDateString([], { weekday: 'short' }) + ' ' + time(ts);
+    template.push(
+      { type: 'separator' },
+      {
+        label: u.session
+          ? `Session · ${fmtTokens(u.session.tokens)} tokens · resets ${time(u.session.resetAt)}`
+          : 'Session · idle',
+        enabled: false,
+      },
+      {
+        label:
+          `Week · ${fmtTokens(u.week.tokens)} tokens` +
+          (u.week.resetAt ? ` · resets ${dayTime(u.week.resetAt)}` : ' · rolling 7 days'),
+        enabled: false,
+      }
+    );
+  }
   if (updateAvailable) {
     template.push({ type: 'separator' });
     template.push({
@@ -483,7 +546,7 @@ function openSettings() {
   }
   settingsWin = new BrowserWindow({
     width: 430,
-    height: 650,
+    height: 762,
     frame: false,
     transparent: true,
     resizable: false,
@@ -537,6 +600,20 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('soundTheme' in patch && SOUND_THEMES.includes(patch.soundTheme)) {
     settings.soundTheme = patch.soundTheme;
     sendChime('open'); // instant preview
+  }
+  if ('usage' in patch) {
+    settings.usage = !!patch.usage;
+    refreshUsage();
+  }
+  if ('weeklyReset' in patch) {
+    const w = patch.weeklyReset;
+    settings.weeklyReset =
+      w &&
+      Number.isInteger(w.day) && w.day >= 0 && w.day <= 6 &&
+      Number.isInteger(w.hour) && w.hour >= 0 && w.hour <= 23
+        ? { day: w.day, hour: w.hour }
+        : null;
+    refreshUsage();
   }
   if ('systemBind' in patch) {
     try {
@@ -625,6 +702,8 @@ if (!app.requestSingleInstanceLock()) {
     }
     fetchStatus();
     setInterval(fetchStatus, POLL_MS);
+    refreshUsage();
+    setInterval(refreshUsage, POLL_MS);
     setTimeout(checkForUpdate, 15_000);
     setInterval(checkForUpdate, 24 * 60 * 60 * 1000);
   });
