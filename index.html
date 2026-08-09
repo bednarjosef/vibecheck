@@ -61,7 +61,7 @@
      wanders, breathes, and casts a tight cone of light downward. */
   @property --spin { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
   @property --trace { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
-  @property --wipe { syntax: '<percentage>'; initial-value: -20%; inherits: false; }
+  @property --erase { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
 
   #panel.glow-border::before {
     content: '';
@@ -131,23 +131,24 @@
     inset: 0;
     border-radius: 16px;
     padding: 1.5px;
-    /* ring band ∩ a vertical wipe — the wipe boundary sweeps downward so
-       the ring dissolves top-first, draining into the lamp */
-    mask:
-      linear-gradient(to bottom, transparent calc(var(--wipe) - 22%), #000 var(--wipe)),
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    mask-composite: intersect, exclude;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
     opacity: 0;
     transition: opacity 220ms ease;
     pointer-events: none;
+    /* visible band on each side: from the erase front to the draw front —
+       the ring is drawn tip-first from the top, then erased the same way */
     background: conic-gradient(
-      color-mix(in srgb, var(--status-color, var(--unknown)) 75%, transparent) 0deg,
+      transparent 0deg,
+      transparent var(--erase),
+      color-mix(in srgb, var(--status-color, var(--unknown)) 75%, transparent) var(--erase),
       color-mix(in srgb, var(--status-color, var(--unknown)) 75%, transparent) var(--trace),
       transparent var(--trace),
       transparent calc(360deg - var(--trace)),
       color-mix(in srgb, var(--status-color, var(--unknown)) 75%, transparent) calc(360deg - var(--trace)),
-      color-mix(in srgb, var(--status-color, var(--unknown)) 75%, transparent) 360deg
+      color-mix(in srgb, var(--status-color, var(--unknown)) 75%, transparent) calc(360deg - var(--erase)),
+      transparent calc(360deg - var(--erase)),
+      transparent 360deg
     );
   }
 
@@ -156,9 +157,9 @@
   }
 
   @keyframes ring-intro {
-    0%   { --trace: 0deg;   --wipe: -20%; opacity: 1; }
-    56%  { --trace: 180deg; --wipe: -20%; opacity: 1; }
-    100% { --trace: 180deg; --wipe: 130%; opacity: 1; }
+    0%   { --trace: 0deg;   --erase: 0deg;   opacity: 1; }
+    56%  { --trace: 180deg; --erase: 0deg;   opacity: 1; }
+    100% { --trace: 180deg; --erase: 180deg; opacity: 1; }
   }
 
   #panel.on.glow-bottom::before {
