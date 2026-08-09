@@ -53,31 +53,69 @@
     opacity: 1;
     transform: translateY(0);
     transition-duration: 150ms;
-    /* ambient breathing in the status color — green when all's well */
-    animation: glow-breathe 3.2s ease-in-out infinite;
   }
 
-  @keyframes glow-breathe {
-    0%, 100% {
-      box-shadow:
-        0 4px 18px rgba(0, 0, 0, 0.35),
-        0 0 16px 0 color-mix(in srgb, var(--status-color, var(--unknown)) 16%, transparent);
-    }
-    50% {
-      box-shadow:
-        0 4px 18px rgba(0, 0, 0, 0.35),
-        0 0 30px 5px color-mix(in srgb, var(--status-color, var(--unknown)) 38%, transparent);
-    }
+  /* ambient halo, breathing in the status color — green when all's well.
+     Two layers with non-harmonic periods and drifting centers: their
+     overlap never visibly repeats, so it reads organic, not mechanical.
+     Opacity-only animation = perfectly smooth interpolation. */
+  #panel::before,
+  #panel::after {
+    content: '';
+    position: absolute;
+    inset: -26px -34px;
+    z-index: -1;
+    border-radius: 50px;
+    opacity: 0;
+    filter: blur(10px);
+    transition: opacity 200ms ease;
+    pointer-events: none;
+  }
+
+  #panel::before {
+    background: radial-gradient(
+      60% 85% at 50% 55%,
+      color-mix(in srgb, var(--status-color, var(--unknown)) 34%, transparent),
+      transparent 72%
+    );
+  }
+
+  #panel::after {
+    background: radial-gradient(
+      45% 70% at 38% 45%,
+      color-mix(in srgb, var(--status-color, var(--unknown)) 26%, transparent),
+      transparent 70%
+    );
+  }
+
+  #panel.on::before {
+    animation: halo-a 5.3s ease-in-out infinite;
+  }
+
+  #panel.on::after {
+    animation: halo-b 8.1s ease-in-out -2.7s infinite;
+  }
+
+  @keyframes halo-a {
+    0%   { opacity: 0.32; transform: scale(0.985); }
+    32%  { opacity: 0.62; transform: scale(1.015); }
+    55%  { opacity: 0.42; transform: scale(0.995); }
+    76%  { opacity: 0.68; transform: scale(1.025); }
+    100% { opacity: 0.32; transform: scale(0.985); }
+  }
+
+  @keyframes halo-b {
+    0%   { opacity: 0.18; transform: translateX(-10px) scale(1); }
+    28%  { opacity: 0.44; transform: translateX(6px) scale(1.03); }
+    52%  { opacity: 0.26; transform: translateX(14px) scale(0.99); }
+    71%  { opacity: 0.5;  transform: translateX(-4px) scale(1.04); }
+    100% { opacity: 0.18; transform: translateX(-10px) scale(1); }
   }
 
   @media (prefers-reduced-motion: reduce) {
     #panel { transition: opacity 120ms linear; transform: none; }
-    #panel.on {
-      animation: none;
-      box-shadow:
-        0 4px 18px rgba(0, 0, 0, 0.35),
-        0 0 22px 2px color-mix(in srgb, var(--status-color, var(--unknown)) 26%, transparent);
-    }
+    #panel.on::before { animation: none; opacity: 0.45; }
+    #panel.on::after { animation: none; opacity: 0.25; }
   }
 
   .row {
