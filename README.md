@@ -63,6 +63,9 @@ Tray → **Settings…** opens a small panel:
   detected; this toggle is the off switch —
   [details below](#usage-in-the-pill)
 - **Start at login**
+- **Position** — top or bottom edge. The whole thing mirrors: it drops in
+  from that side, and the underglow moves to the pill's far edge so the
+  light always falls away from the screen edge
 - **Display** — which monitor the pill appears on (default: primary)
 
 No tray icon (GNOME hides them without an extension)? `vibecheck --settings`

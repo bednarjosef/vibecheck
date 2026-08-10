@@ -175,6 +175,13 @@
         <input type="checkbox" id="autostart" />
       </div>
       <div class="row">
+        <div><div class="lbl">Position</div><div class="sub">which edge it drops in from</div></div>
+        <select id="position">
+          <option value="top">Top</option>
+          <option value="bottom">Bottom</option>
+        </select>
+      </div>
+      <div class="row">
         <div><div class="lbl">Display</div><div class="sub">where the pill appears</div></div>
         <select id="display"></select>
       </div>
@@ -203,6 +210,7 @@
     $('sound').checked = s.settings.sound;
     $('autostart').checked = s.settings.autostart;
     $('soundTheme').value = s.settings.soundTheme;
+    $('position').value = s.settings.position;
 
     $('limitsSync').checked = s.claude.limitsInstalled;
     if (!s.claude.found) {
@@ -251,6 +259,7 @@
     window.vc.set({ displayId: e.target.value === '' ? null : Number(e.target.value) })
   );
   $('soundTheme').addEventListener('change', (e) => window.vc.set({ soundTheme: e.target.value }));
+  $('position').addEventListener('change', (e) => window.vc.set({ position: e.target.value }));
   for (const id of ['autoReveal', 'sound', 'autostart']) {
     $(id).addEventListener('change', (e) => window.vc.set({ [id]: e.target.checked }));
   }

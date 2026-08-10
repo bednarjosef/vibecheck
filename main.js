@@ -15,7 +15,7 @@ const keys = require('./keys');
 const POLL_MS = 60_000;           // background refresh interval
 const TAP_MS = 350;               // key held shorter than this = tap (toggle); longer = hold
 const RELEASE_MS = 1_000;         // slow pokes (process spawns): silence = key released
-const TOP_FRAC = 0.1;             // panel sits this fraction down from the top of the screen
+const EDGE_FRAC = 0.1;            // panel sits this fraction in from its screen edge
 
 // Fast pokes: the GNOME binding just touches this file (~10ms), so the app
 // sees key auto-repeat at its true ~30ms cadence and can use tight windows.
@@ -36,6 +36,7 @@ const INCIDENTS_URL = 'https://status.claude.com/api/v2/incidents/unresolved.jso
 const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
 
 const SOUND_THEMES = ['bells', 'pluck', 'wood', 'piano'];
+const POSITIONS = ['top', 'bottom'];
 
 const settings = {
   shortcut: keys.DEFAULT, // { code, keysym, label } — any key, recorded live
@@ -44,6 +45,7 @@ const settings = {
   soundTheme: 'bells',   // which voice the chimes use
   autostart: false,      // launch at login
   displayId: null,       // null = primary display
+  position: 'top',       // which edge the pill drops in from: top | bottom
   weekReset: null,       // a real weekly reset moment, learned from Claude Code
   statuslineChain: null, // original statusline command the shim defers to
   statuslinePrev: null,  // original statusLine settings object, restored on disable
@@ -62,6 +64,7 @@ function loadConfig() {
     if (typeof c.displayId === 'number') settings.displayId = c.displayId;
     if (Number.isFinite(c.weekReset)) settings.weekReset = c.weekReset;
     if (SOUND_THEMES.includes(c.soundTheme)) settings.soundTheme = c.soundTheme;
+    if (POSITIONS.includes(c.position)) settings.position = c.position;
     if (typeof c.statuslineChain === 'string') settings.statuslineChain = c.statuslineChain;
     if (c.statuslinePrev && typeof c.statuslinePrev === 'object') settings.statuslinePrev = c.statuslinePrev;
   } catch (_) {} // no config yet, or unreadable — stay on the defaults
@@ -409,13 +412,19 @@ function positionWindow() {
     screen.getAllDisplays().find((d) => d.id === settings.displayId) ||
     screen.getPrimaryDisplay();
   const wa = target.workArea;
-  const [w] = win.getSize();
-  // the page has 30px of glow headroom above the pill — compensate so the
-  // pill itself sits at TOP_FRAC
-  win.setPosition(
-    wa.x + Math.round((wa.width - w) / 2),
-    Math.max(wa.y, wa.y + Math.round(wa.height * TOP_FRAC) - 24)
-  );
+  const [w, h] = win.getSize();
+  // the page keeps 30px of glow headroom on the pill's outer side —
+  // compensate so the pill itself sits EDGE_FRAC in from its edge
+  const inset = Math.round(wa.height * EDGE_FRAC) - 24;
+  const y =
+    settings.position === 'bottom'
+      ? Math.min(wa.y + wa.height - h, wa.y + wa.height - h - inset)
+      : Math.max(wa.y, wa.y + inset);
+  win.setPosition(wa.x + Math.round((wa.width - w) / 2), y);
+}
+
+function sendPosition() {
+  if (win && !win.isDestroyed()) win.webContents.send('position', settings.position);
 }
 
 function toggle() {
@@ -617,6 +626,7 @@ function createWindow() {
   win.loadFile('index.html');
   win.webContents.on('did-finish-load', () => {
     if (lastData) win.webContents.send('status', lastData);
+    sendPosition();
     refreshUsage(); // waits out any in-flight scan — never paints partial numbers
   });
 }
@@ -723,6 +733,12 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   if ('soundTheme' in patch && SOUND_THEMES.includes(patch.soundTheme)) {
     settings.soundTheme = patch.soundTheme;
     sendChime('open'); // instant preview
+  }
+  if ('position' in patch && POSITIONS.includes(patch.position)) {
+    settings.position = patch.position;
+    sendPosition();
+    positionWindow();
+    show(true); // preview it where it now lives
   }
   saveConfig();
   return true;
