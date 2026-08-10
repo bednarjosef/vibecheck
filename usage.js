@@ -1,25 +1,30 @@
 // usage.js — session + weekly usage, read from Claude Code's local
 // transcripts (~/.claude/projects/**/*.jsonl). Every assistant message there
 // carries exact token counts, so usage is derivable fully offline — no
-// account access, no endpoints, no auth. Sessions follow Anthropic's model:
-// a 5-hour window that opens with the first message after the previous
-// window lapsed, anchored to the top of the hour. The weekly reset moment is
-// account-specific and not in the logs — Claude Code reports it through the
-// statusline shim, and without that it's a rolling 7-day sum.
+// account access, no endpoints, no auth. Neither window's real start is in
+// the logs, though: Claude Code reports both through the statusline shim, and
+// they're used whenever we have them. Without the shim the week is a rolling
+// 7 days and the session is replayed from the transcripts — a 5-hour block
+// that opens with the first message after the previous one lapsed.
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 const HOUR_MS = 3600_000;
+// Tallies are bucketed at 5 minutes, because that's the resolution a window
+// edge can land on — the real reset moments Claude Code reports are always on
+// a 5-minute mark, never the top of the hour. Bucketing by the hour meant a
+// window boundary could only be honoured to within 60 minutes of the truth.
+const BUCKET_MS = 5 * 60_000;
 const SESSION_MS = 5 * HOUR_MS;
 const WEEK_MS = 7 * 24 * HOUR_MS;
 const KEEP_MS = 8 * 24 * HOUR_MS; // a hair over the longest window we show
 
 // Per-file tail state: byte offset of the next unread line, plus that file's
-// hour-bucketed token totals — kept per file so a vanished or rewritten file
+// bucketed token totals — kept per file so a vanished or rewritten file
 // can be dropped without corrupting the global sum.
-const files = new Map(); // path -> { offset, buckets: Map(hourMs -> tokens) }
+const files = new Map(); // path -> { offset, buckets: Map(bucketMs -> tokens) }
 // Resumed/forked sessions replay earlier messages into a new transcript, so
 // each API response must count once no matter how many files carry it.
 const seen = new Set(); // `${message.id}:${requestId}`
@@ -78,8 +83,8 @@ function ingest(buf, state) {
   const key = `${obj.message.id || obj.uuid}:${obj.requestId || ''}`;
   if (seen.has(key)) return;
   seen.add(key);
-  const hour = ts - (ts % HOUR_MS);
-  state.buckets.set(hour, (state.buckets.get(hour) || 0) + tokens);
+  const bucket = ts - (ts % BUCKET_MS);
+  state.buckets.set(bucket, (state.buckets.get(bucket) || 0) + tokens);
 }
 
 // read only the bytes appended since last time; a partial line mid-write is
@@ -128,39 +133,52 @@ function refresh() {
   return refreshing;
 }
 
-// week: null (rolling 7 days) or the account's real window, { since, resetAt }
-function summary(week) {
-  const hours = new Map();
+// Each window is either the account's real one, { since, resetAt }, or null —
+// then the week falls back to a rolling 7 days and the session to a replay.
+const dated = (w) => !!w && Number.isFinite(w.since) && Number.isFinite(w.resetAt);
+
+function summary(week, session) {
+  const marks = new Map();
   for (const f of files.values()) {
-    for (const [h, t] of f.buckets) hours.set(h, (hours.get(h) || 0) + t);
+    for (const [b, t] of f.buckets) marks.set(b, (marks.get(b) || 0) + t);
   }
-  if (!hours.size) return null;
+  if (!marks.size) return null;
   const now = Date.now();
-
-  // replay 5h blocks over the history: first activity at-or-after the
-  // previous block's end opens a new block at that hour
-  let start = 0;
-  let end = 0;
-  for (const h of [...hours.keys()].sort((a, b) => a - b)) {
-    if (h >= end) {
-      start = h;
-      end = start + SESSION_MS;
-    }
-  }
-  let session = null;
-  if (now < end) {
+  const since = (from) => {
     let tokens = 0;
-    for (const [h, t] of hours) if (h >= start) tokens += t;
-    session = { tokens, resetAt: end };
+    for (const [b, t] of marks) if (b >= from) tokens += t;
+    return tokens;
+  };
+
+  // The real 5h window is the one Claude Code reports. Replaying it from the
+  // transcripts can only ever guess where it opened, and the guess compounds:
+  // every block is anchored to the one before it, so being early by a few
+  // minutes once means being early by that much for the rest of the day —
+  // until a block rolls over ahead of the real one and the tally appears to
+  // reset mid-session.
+  let block = null;
+  if (dated(session)) {
+    block = { tokens: since(session.since), resetAt: session.resetAt };
+  } else {
+    let start = 0;
+    let end = 0;
+    for (const b of [...marks.keys()].sort((x, y) => x - y)) {
+      if (b >= end) {
+        start = b;
+        end = start + SESSION_MS;
+      }
+    }
+    if (now < end) block = { tokens: since(start), resetAt: end };
   }
 
-  // the account's real window when we know it, a rolling 7 days when we don't
-  const dated = week && Number.isFinite(week.since) && Number.isFinite(week.resetAt);
-  const since = dated ? week.since : now - WEEK_MS;
-  let weekTokens = 0;
-  for (const [h, t] of hours) if (h >= since) weekTokens += t;
-
-  return { session, week: { tokens: weekTokens, resetAt: dated ? week.resetAt : null } };
+  const realWeek = dated(week);
+  return {
+    session: block,
+    week: {
+      tokens: since(realWeek ? week.since : now - WEEK_MS),
+      resetAt: realWeek ? week.resetAt : null,
+    },
+  };
 }
 
 module.exports = { refresh, summary };

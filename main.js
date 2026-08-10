@@ -324,6 +324,16 @@ function watchLimits() {
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const SESSION_MS = 5 * 60 * 60 * 1000;
+
+// Unlike the weekly one, the 5-hour window isn't worth remembering past the
+// moment it lapses: it reopens whenever you next send a message, not on a
+// fixed cadence. So it's used while Claude Code is reporting it, and the
+// transcript replay takes over when it isn't.
+function sessionWindow(limits) {
+  const at = limits && limits.session && limits.session.resetAt;
+  return Number.isFinite(at) ? { since: at - SESSION_MS, resetAt: at } : null;
+}
 
 // The account's weekly reset moment isn't in the transcripts — Claude Code
 // only tells the shim. Once heard it's kept for good and stepped forward a
@@ -354,7 +364,7 @@ function sendUsage() {
   const raw = readLimitsFile(); // one read feeds both
   learnWeekReset(raw);
   const limits = readLimits(raw);
-  const local = usage.summary(weekWindow());
+  const local = usage.summary(weekWindow(), sessionWindow(limits));
   const data =
     local || limits ? { ...(local || { session: null, week: null }), limits } : null;
   if (win && !win.isDestroyed()) win.webContents.send('usage', data);
