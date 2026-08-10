@@ -11,6 +11,12 @@
     --unknown: #8b93a1;
     --ink: #e8ebef;
     --dim: #9aa2ad;
+
+    /* the usage ramp — one source of truth for the meters and for the
+       headline a milestone announcement borrows */
+    --tone-flat: #949cab;
+    --tone-warm: #d8a13c;
+    --tone-hot: #e0674f;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -344,9 +350,9 @@
      and borrowing them would weld two unrelated facts together. The neutral
      is bright enough that the bar and its figure read as one object at every
      value — before, they only matched once the number went amber. */
-  .m { --tone: #949cab; }
-  .m.warm { --tone: #d8a13c; }
-  .m.hot  { --tone: #e0674f; }
+  .m { --tone: var(--tone-flat); }
+  .m.warm { --tone: var(--tone-warm); }
+  .m.hot  { --tone: var(--tone-hot); }
 
   /* 4ch is exactly "100%" — the widest this can ever be, so the column is
      as narrow as it can get and still never jump */
@@ -547,23 +553,39 @@
     panel.classList.toggle('wide', headEl.scrollWidth > usageEl.scrollWidth + 1);
   }
 
-  function render(data, reroll) {
-    statusData = data;
-    const s = WORDS[data.indicator] || WORDS.unknown;
-    panel.style.setProperty('--status-color', s.color);
-    wordEl.textContent = phraseFrom(data.indicator, reroll);
+  // A milestone announcement: the pill let itself in to say one thing, so it
+  // says only that — no phrase, no incident title underneath it. Below 80%
+  // it's plain information and wears the ink; past that it borrows the same
+  // ramp the meters use, so the underglow is lit by the reason it appeared.
+  const WINDOW_NAME = { session: 'Session', week: 'Week' };
+  let notice = null;
 
-    const bad = data.components.filter((c) => c.status !== 'operational');
-    if (data.incident && data.indicator !== 'none') {
-      // the human-written incident title beats raw component states
-      affectedEl.textContent = data.incident.name;
-      affectedEl.classList.add('has');
-    } else {
-      affectedEl.textContent = bad.length
-        ? bad.map((c) => c.name.replace(/\s*\(.*?\)/, '')).join(' + ')
-        : '';
-      affectedEl.classList.toggle('has', bad.length > 0);
-    }
+  const noticeText = (n) =>
+    n.pct >= 100
+      ? `${WINDOW_NAME[n.window]} limit reached`
+      : `${WINDOW_NAME[n.window]} ${n.pct}% used`;
+
+  const noticeTone = (pct) =>
+    pct >= 95 ? 'var(--tone-hot)' : pct >= 80 ? 'var(--tone-warm)' : 'var(--ink)';
+
+  const BLANK = { indicator: 'unknown', components: [], incident: null };
+
+  function render(data, reroll) {
+    if (data) statusData = data;
+    const d = statusData || BLANK;
+    const s = WORDS[d.indicator] || WORDS.unknown;
+    panel.style.setProperty('--status-color', notice ? noticeTone(notice.pct) : s.color);
+    wordEl.textContent = notice ? noticeText(notice) : phraseFrom(d.indicator, reroll);
+
+    // the human-written incident title beats raw component states
+    const bad = d.components.filter((c) => c.status !== 'operational');
+    const extra = notice
+      ? ''
+      : d.incident && d.indicator !== 'none'
+        ? d.incident.name
+        : bad.map((c) => c.name.replace(/\s*\(.*?\)/, '')).join(' + ');
+    affectedEl.textContent = extra;
+    affectedEl.classList.toggle('has', !!extra);
     renderUsage();
   }
 
@@ -652,7 +674,7 @@
   window.vibecheck.onReveal(() => {
     panel.classList.remove('out');
     panel.classList.add('on');
-    if (statusData) render(statusData, true); // a fresh phrase each summoning
+    render(null, true); // a fresh phrase each summoning
     renderUsage();
     clearInterval(ticker);
     ticker = setInterval(renderUsage, 20_000);
@@ -660,6 +682,9 @@
   window.vibecheck.onConceal(() => {
     clearInterval(ticker);
     ticker = null;
+    // the announcement is spent — but repainting now would swap the headline
+    // back mid-exit, so the next reveal is what clears it off the card
+    notice = null;
     if (!panel.classList.contains('on')) return;
     panel.classList.remove('on');
     panel.classList.add('out');
@@ -672,6 +697,10 @@
   });
 
   window.vibecheck.onChime(chime);
+  window.vibecheck.onNotice((n) => {
+    notice = n;
+    render();
+  });
   window.vibecheck.onUsage((d) => {
     usageData = d;
     renderUsage();

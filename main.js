@@ -360,6 +360,41 @@ function learnWeekReset(raw = readLimitsFile()) {
   saveConfig();
 }
 
+// Every 10% of a window, the pill announces itself. Marks are seeded the
+// first time a window is seen, so launching the app at 43% says nothing —
+// only a crossing does. resetAt identifies the window: when it changes the
+// window has rolled, and the new one is seeded silently too.
+const marks = { session: null, week: null };
+
+// Same window, told apart by when it ends. Compared loosely on purpose: the
+// shim rewrites the moment on every Claude Code reply, and a second of drift
+// in that value must not read as "a new window" — that would reseed the mark
+// and swallow the crossing silently.
+const sameWindow = (a, b) =>
+  a === b || (Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) < 60_000);
+
+function noteUsageMarks(limits) {
+  for (const key of ['session', 'week']) {
+    const w = limits && limits[key];
+    if (!w || typeof w.pct !== 'number') {
+      marks[key] = null;
+      continue;
+    }
+    const seen = marks[key];
+    const decile = Math.floor(w.pct / 10);
+    marks[key] = { resetAt: w.resetAt, decile };
+    // a decile can be crossed by more than one step at a time (a long reply
+    // lands as one jump) — that's still one announcement, of where it landed
+    if (seen && sameWindow(seen.resetAt, w.resetAt) && decile > seen.decile) announce(key, w.pct);
+  }
+}
+
+function announce(window, pct) {
+  if (!settings.autoReveal) return;
+  if (win && !win.isDestroyed()) win.webContents.send('notice', { window, pct });
+  autoPeek(6_000);
+}
+
 function sendUsage() {
   const raw = readLimitsFile(); // one read feeds both
   learnWeekReset(raw);
@@ -368,6 +403,7 @@ function sendUsage() {
   const data =
     local || limits ? { ...(local || { session: null, week: null }), limits } : null;
   if (win && !win.isDestroyed()) win.webContents.send('usage', data);
+  noteUsageMarks(limits);
 }
 
 function refreshUsage() {
@@ -402,8 +438,13 @@ function hide(quiet = false) {
 // status changed on its own: pop in briefly, then melt away — quiet, the
 // status-change chime is the soundtrack for this one
 function autoPeek(ms) {
-  if (visible) return; // already on screen, the re-render is enough
-  show(true);
+  // Already up because you asked for it: say the new thing, but don't take
+  // the card away on a timer you didn't start. Up because of an earlier
+  // peek: the new one gets its own full turn rather than inheriting the
+  // remains of the old timer, or a milestone can flash past in a blink.
+  if (visible && !autoPeekTimer) return;
+  if (!visible) show(true);
+  clearTimeout(autoPeekTimer);
   autoPeekTimer = setTimeout(() => {
     autoPeekTimer = null;
     if (!holding) hide(true);
