@@ -2,6 +2,7 @@
 const { app, BrowserWindow, Tray, Menu, nativeImage, screen, ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { execFile } = require('child_process');
 const { uIOhook, UiohookKey } = require('uiohook-napi');
 const gnomeShortcut = require('./gnome-shortcut');
@@ -49,6 +50,8 @@ const settings = {
   glow: 'bottom',        // ambient light: bottom | border | off
   usage: true,           // show Claude Code usage (from its local transcripts)
   weeklyReset: null,     // { day: 0-6 Sun-Sat, hour: 0-23 } or null = rolling 7 days
+  statuslineChain: null, // original statusline command the shim defers to
+  statuslinePrev: null,  // original statusLine settings object, restored on disable
 };
 let holdKey = UiohookKey[DEFAULT_KEY];
 
@@ -70,6 +73,8 @@ function loadConfig() {
     ) {
       settings.weeklyReset = { day: c.weeklyReset.day, hour: c.weeklyReset.hour };
     }
+    if (typeof c.statuslineChain === 'string') settings.statuslineChain = c.statuslineChain;
+    if (c.statuslinePrev && typeof c.statuslinePrev === 'object') settings.statuslinePrev = c.statuslinePrev;
   } catch (_) {} // no config yet, or unreadable — stay on the defaults
   holdKey = UiohookKey[settings.key];
 }
@@ -205,10 +210,121 @@ function fmtTokens(n) {
   return String(n);
 }
 
+// ── real limit % (opt-in Claude Code statusline shim) ───────────────
+// Claude Code hands every statusline script the account's true /usage
+// percentages (rate_limits.*.used_percentage — documented, Pro/Max).
+// "Install" points ~/.claude/settings.json at our shim, which tees those
+// numbers into <userData>/limits.json and defers to any original
+// statusline. Nothing here touches credentials or the network.
+const CLAUDE_SETTINGS = path.join(os.homedir(), '.claude', 'settings.json');
+const SHIM_SRC = path.join(__dirname, 'statusline-shim.js');
+const SHIM_DEST = path.join(app.getPath('userData'), 'statusline-shim.js');
+const LIMITS_PATH = path.join(app.getPath('userData'), 'limits.json');
+const LIMITS_STALE_MS = 14 * 24 * 60 * 60 * 1000; // shim gone quiet — forget its numbers
+
+const isShimCommand = (sl) =>
+  !!(sl && typeof sl.command === 'string' && sl.command.includes('statusline-shim'));
+
+function readClaudeSettings() {
+  let raw;
+  try { raw = fs.readFileSync(CLAUDE_SETTINGS, 'utf8'); } catch (_) { return {}; } // no file yet is fine
+  return JSON.parse(raw); // unparseable throws — callers abort rather than clobber
+}
+
+function limitsInstalled() {
+  try { return isShimCommand(readClaudeSettings().statusLine); } catch (_) { return false; }
+}
+
+function limitsInstall() {
+  let claude;
+  try { claude = readClaudeSettings(); }
+  catch (_) { return { ok: false, error: '~/.claude/settings.json is not valid JSON — fix it first' }; }
+
+  try {
+    // copy the shim out of the package: npm updates, dev checkouts and
+    // AppImages all move or vanish; <userData> is the one stable home
+    fs.mkdirSync(app.getPath('userData'), { recursive: true });
+    fs.copyFileSync(SHIM_SRC, SHIM_DEST);
+
+    const prev = claude.statusLine;
+    if (prev && !isShimCommand(prev)) {
+      settings.statuslinePrev = prev; // restored on disable
+      settings.statuslineChain = typeof prev.command === 'string' ? prev.command : null;
+      saveConfig();
+    }
+
+    // one-time safety copy from before we ever touched the file
+    const backup = path.join(app.getPath('userData'), 'claude-settings.backup.json');
+    if (!fs.existsSync(backup) && fs.existsSync(CLAUDE_SETTINGS)) {
+      fs.copyFileSync(CLAUDE_SETTINGS, backup);
+    }
+
+    claude.statusLine = { type: 'command', command: `node "${SHIM_DEST}" "${app.getPath('userData')}"` };
+    if (prev && prev.padding !== undefined) claude.statusLine.padding = prev.padding;
+    fs.mkdirSync(path.dirname(CLAUDE_SETTINGS), { recursive: true });
+    fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(claude, null, 2) + '\n');
+  } catch (err) {
+    return { ok: false, error: 'install failed: ' + err.message };
+  }
+  return { ok: true };
+}
+
+function limitsUninstall() {
+  let claude;
+  try { claude = readClaudeSettings(); }
+  catch (_) { return { ok: false, error: '~/.claude/settings.json is not valid JSON — fix it first' }; }
+  try {
+    if (isShimCommand(claude.statusLine)) {
+      if (settings.statuslinePrev) claude.statusLine = settings.statuslinePrev;
+      else delete claude.statusLine;
+      fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(claude, null, 2) + '\n');
+    }
+    fs.rmSync(LIMITS_PATH, { force: true });
+  } catch (err) {
+    return { ok: false, error: 'uninstall failed: ' + err.message };
+  }
+  settings.statuslinePrev = null;
+  settings.statuslineChain = null;
+  saveConfig();
+  return { ok: true };
+}
+
+function readLimits() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(LIMITS_PATH, 'utf8'));
+    const now = Date.now();
+    if (!raw.updated_at || now - raw.updated_at > LIMITS_STALE_MS) return null;
+    const pick = (w) => {
+      if (!w || typeof w.used_percentage !== 'number') return null;
+      const resetAt = typeof w.resets_at === 'number' ? w.resets_at * 1000 : null;
+      // window reset since Claude Code last reported — 0 until fresh data
+      if (resetAt && now >= resetAt) return { pct: 0, resetAt: null };
+      return { pct: Math.round(w.used_percentage), resetAt };
+    };
+    const session = pick(raw.five_hour);
+    const week = pick(raw.seven_day);
+    return session || week ? { session, week } : null;
+  } catch (_) { return null; } // absent or malformed — pill falls back to token counts
+}
+
+function watchLimits() {
+  let t = null;
+  try {
+    fs.watch(app.getPath('userData'), (_ev, name) => {
+      if (name !== 'limits.json') return;
+      clearTimeout(t);
+      t = setTimeout(sendUsage, 250); // debounce the tmp+rename pair
+    });
+  } catch (_) {} // no watcher = the 60s poll still picks changes up
+}
+
 let lastUsageSent = '';
 
 function sendUsage() {
-  const data = settings.usage ? usage.summary(settings.weeklyReset) : null;
+  const local = settings.usage ? usage.summary(settings.weeklyReset) : null;
+  const limits = settings.usage ? readLimits() : null;
+  const data =
+    local || limits ? { ...(local || { session: null, week: null }), limits } : null;
   if (win && !win.isDestroyed()) win.webContents.send('usage', data);
   const key = JSON.stringify(data);
   if (key !== lastUsageSent) {
@@ -484,26 +600,43 @@ function buildTrayMenu() {
     { label: 'Settings…', click: () => openSettings() },
   ];
   const u = settings.usage ? usage.summary(settings.weeklyReset) : null;
-  if (u) {
+  const lim = settings.usage ? readLimits() : null;
+  if (u || lim) {
     const time = (ts) =>
       new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const dayTime = (ts) =>
       new Date(ts).toLocaleDateString([], { weekday: 'short' }) + ' ' + time(ts);
+    // real % (from the statusline shim) leads; local token counts follow
+    const sess = [];
+    if (lim && lim.session) sess.push(`${lim.session.pct}%`);
+    if (u && u.session) sess.push(`${fmtTokens(u.session.tokens)} tokens`);
+    const sessReset =
+      (lim && lim.session && lim.session.resetAt) || (u && u.session && u.session.resetAt);
+    const wk = [];
+    if (lim && lim.week) wk.push(`${lim.week.pct}%`);
+    if (u) wk.push(`${fmtTokens(u.week.tokens)} tokens`);
+    const wkReset = (lim && lim.week && lim.week.resetAt) || (u && u.week.resetAt);
     template.push(
       { type: 'separator' },
       {
-        label: u.session
-          ? `Session · ${fmtTokens(u.session.tokens)} tokens · resets ${time(u.session.resetAt)}`
+        label: sess.length
+          ? `Session · ${sess.join(' · ')}` + (sessReset ? ` · resets ${time(sessReset)}` : '')
           : 'Session · idle',
-        enabled: false,
-      },
-      {
-        label:
-          `Week · ${fmtTokens(u.week.tokens)} tokens` +
-          (u.week.resetAt ? ` · resets ${dayTime(u.week.resetAt)}` : ' · rolling 7 days'),
         enabled: false,
       }
     );
+    if (wk.length) {
+      template.push({
+        label:
+          `Week · ${wk.join(' · ')}` +
+          (wkReset
+            ? ` · resets ${dayTime(wkReset)}`
+            : lim && lim.week
+              ? ''
+              : ' · rolling 7 days'),
+        enabled: false,
+      });
+    }
   }
   if (updateAvailable) {
     template.push({ type: 'separator' });
@@ -546,7 +679,7 @@ function openSettings() {
   }
   settingsWin = new BrowserWindow({
     width: 430,
-    height: 762,
+    height: 880,
     frame: false,
     transparent: true,
     resizable: false,
@@ -566,6 +699,10 @@ ipcMain.handle('settings:get', async () => {
   settings,
   keyChoices: KEY_CHOICES,
   platform: process.platform,
+  claude: {
+    found: fs.existsSync(path.dirname(CLAUDE_SETTINGS)),
+    limitsInstalled: limitsInstalled(),
+  },
   systemBind: {
     available: !!p,
     desktop: p ? p.desktop : null,
@@ -628,6 +765,12 @@ ipcMain.handle('settings:set', async (_e, patch) => {
   }
   saveConfig();
   return true;
+});
+
+ipcMain.handle('limits:set', (_e, on) => {
+  const r = on ? limitsInstall() : limitsUninstall();
+  sendUsage(); // reflect the change in pill + tray right away
+  return { ...r, installed: limitsInstalled() };
 });
 
 ipcMain.on('settings:close', () => {
@@ -704,6 +847,7 @@ if (!app.requestSingleInstanceLock()) {
     setInterval(fetchStatus, POLL_MS);
     refreshUsage();
     setInterval(refreshUsage, POLL_MS);
+    watchLimits();
     setTimeout(checkForUpdate, 15_000);
     setInterval(checkForUpdate, 24 * 60 * 60 * 1000);
   });

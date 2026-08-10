@@ -26,7 +26,8 @@
       "kde-shortcut.js",
       "desktop-integration.js",
       "launch.js",
-      "usage.js"
+      "usage.js",
+      "statusline-shim.js"
     ],
     "linux": {
       "target": [
@@ -80,6 +81,7 @@
     "desktop-integration.js",
     "launch.js",
     "usage.js",
+    "statusline-shim.js",
     "build/icon.png",
     "build/icon.icns",
     "build/icon.ico",

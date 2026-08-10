@@ -332,9 +332,17 @@
           : n >= 1000
             ? Math.round(n / 1000) + 'K'
             : String(n);
+    // real /usage percentages (statusline shim) beat local token estimates
+    const lim = usageData.limits;
     const parts = [];
-    if (usageData.session) parts.push(`session ${fmt(usageData.session.tokens)}`);
-    parts.push(`week ${fmt(usageData.week.tokens)}`);
+    if (lim && lim.session) parts.push(`session ${lim.session.pct}%`);
+    else if (usageData.session) parts.push(`session ${fmt(usageData.session.tokens)}`);
+    if (lim && lim.week) parts.push(`week ${lim.week.pct}%`);
+    else if (usageData.week) parts.push(`week ${fmt(usageData.week.tokens)}`);
+    if (!parts.length) {
+      usageEl.classList.remove('has');
+      return;
+    }
     usageEl.textContent = '· ' + parts.join(' · ');
     usageEl.classList.add('has');
   }

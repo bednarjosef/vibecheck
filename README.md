@@ -64,6 +64,9 @@ Tray → **Settings…** opens a small panel:
 - **Weekly reset** — anchor the weekly number to your plan's actual reset
   moment (copy it from `/usage` in Claude Code); unset, it's a rolling
   7-day total
+- **Real limit %** — swap the token counts for your actual `/usage`
+  percentages (`SESSION 34% · WEEK 62%`) via a tiny Claude Code
+  status-line shim — one click, [details below](#usage-in-the-pill)
 - **Start at login**
 - **Ambient light** — a living glow in the status color: *Underglow* (a
   lamp wandering the bottom edge, casting light downward), *Border
@@ -108,9 +111,24 @@ Honest fine print:
 - Session boundaries are reconstructed from timestamps (first message after
   a lapse opens a 5-hour window, anchored to the hour) — the same
   approximation ccusage uses, usually matching `/usage` to the minute.
-- It only sees Claude Code on this machine — claude.ai chats and other
-  devices don't appear, and official limit percentages aren't published,
-  so it shows real tokens rather than a made-up percent.
+- Token counts only see Claude Code on this machine — claude.ai chats and
+  other devices don't appear. Real limit % (below) doesn't have that
+  limitation.
+
+### Real limit % (opt-in)
+
+Claude Code hands every custom [status line](https://code.claude.com/docs/en/statusline)
+script the account's true rate-limit numbers — the same percentages
+`/usage` shows. Flip **Real limit %** in Settings and vibecheck points the
+status line in your `~/.claude/settings.json` at a tiny shim (copied to
+vibecheck's own config dir, so it survives app updates). On every Claude
+Code reply the shim tees `rate_limits` into a local file for the pill,
+then hands the line straight through to whatever status-line command you
+already had — or prints a minimal `model · dir · 5h % · wk %` line if you
+had none. The percentages are account-wide (other devices and claude.ai
+included), refresh as you work, and come with real reset times. No
+credentials are read, nothing leaves your machine, and switching it off
+restores your settings exactly as they were.
 
 ## Platform notes
 

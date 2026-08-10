@@ -176,6 +176,10 @@
         </div>
       </div>
       <div class="row">
+        <div><div class="lbl">Real limit %</div><div class="sub" id="limits-sub">shows /usage percentages via a Claude Code status-line shim</div></div>
+        <input type="checkbox" id="limitsSync" />
+      </div>
+      <div class="row">
         <div><div class="lbl">Start at login</div></div>
         <input type="checkbox" id="autostart" />
       </div>
@@ -234,6 +238,12 @@
     $('wrDay').value = wr ? String(wr.day) : '';
     $('wrHour').value = String(wr ? wr.hour : 17);
     $('wrHour').disabled = !wr;
+
+    $('limitsSync').checked = s.claude.limitsInstalled;
+    if (!s.claude.found) {
+      $('limitsSync').disabled = true;
+      $('limits-sub').textContent = 'Claude Code was not found on this machine';
+    }
   }
 
   $('key').addEventListener('change', (e) => window.vc.set({ key: e.target.value }));
@@ -245,6 +255,15 @@
   for (const id of ['systemBind', 'autoReveal', 'sound', 'autostart', 'usage']) {
     $(id).addEventListener('change', (e) => window.vc.set({ [id]: e.target.checked }));
   }
+  $('limitsSync').addEventListener('change', async (e) => {
+    const r = await window.vc.setLimits(e.target.checked);
+    e.target.checked = r.installed;
+    $('limits-sub').textContent = r.ok
+      ? r.installed
+        ? 'installed — updates with your next Claude Code reply'
+        : 'shows /usage percentages via a Claude Code status-line shim'
+      : r.error;
+  });
   function sendWeeklyReset() {
     const day = $('wrDay').value;
     $('wrHour').disabled = day === '';
