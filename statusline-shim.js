@@ -44,10 +44,14 @@ process.stdin.on('end', () => {
     config = JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'));
   } catch (_) {}
 
-  if (config.statuslineChain) {
-    // the user's own status line owns the row — hand it over untouched
+  // whatever status line we displaced still owns the row — hand it over
+  // untouched. (statuslineChain was the same command under an older key.)
+  const chain =
+    (config.statuslinePrev && config.statuslinePrev.command) || config.statuslineChain;
+
+  if (typeof chain === 'string' && chain) {
     const { spawn } = require('child_process');
-    const child = spawn(config.statuslineChain, { shell: true, stdio: ['pipe', 'inherit', 'inherit'] });
+    const child = spawn(chain, { shell: true, stdio: ['pipe', 'inherit', 'inherit'] });
     child.stdin.on('error', () => {}); // chained command may exit without reading stdin
     child.stdin.end(input);
     child.on('error', () => process.exit(0));

@@ -154,16 +154,13 @@ function summary(week) {
     session = { tokens, resetAt: end };
   }
 
+  // the account's real window when we know it, a rolling 7 days when we don't
   const dated = week && Number.isFinite(week.since) && Number.isFinite(week.resetAt);
   const since = dated ? week.since : now - WEEK_MS;
-  const resetAt = dated ? week.resetAt : null;
   let weekTokens = 0;
   for (const [h, t] of hours) if (h >= since) weekTokens += t;
 
-  return {
-    session,
-    week: { tokens: weekTokens, resetAt, rolling: !resetAt },
-  };
+  return { session, week: { tokens: weekTokens, resetAt: dated ? week.resetAt : null } };
 }
 
 module.exports = { refresh, summary };

@@ -88,7 +88,10 @@
   .lbl { font-size: 12.5px; color: var(--ink); }
   .sub { margin-top: 3px; font-size: 10.5px; color: var(--faint); line-height: 1.5; }
 
-  select:disabled { opacity: 0.45; }
+  /* the only control that ever disables is the Real limit % toggle, when
+     there's no Claude Code to talk to — it should look unavailable */
+  select:disabled,
+  input:disabled { opacity: 0.45; cursor: default; }
 
   /* the key recorder: shows the current key, listens for the next one */
   #key {

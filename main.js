@@ -47,8 +47,8 @@ const settings = {
   displayId: null,       // null = primary display
   position: 'top',       // which edge the pill drops in from: top | bottom
   weekReset: null,       // a real weekly reset moment, learned from Claude Code
-  statuslineChain: null, // original statusline command the shim defers to
-  statuslinePrev: null,  // original statusLine settings object, restored on disable
+  statuslinePrev: null,  // the status line we displaced: the shim defers to
+                         // its command, and disabling puts the object back
   limitsSetup: false,    // auto-setup ran (or the user chose) — don't re-decide for them
 };
 let holdKey = settings.shortcut.code;
@@ -65,7 +65,6 @@ function loadConfig() {
     if (Number.isFinite(c.weekReset)) settings.weekReset = c.weekReset;
     if (SOUND_THEMES.includes(c.soundTheme)) settings.soundTheme = c.soundTheme;
     if (POSITIONS.includes(c.position)) settings.position = c.position;
-    if (typeof c.statuslineChain === 'string') settings.statuslineChain = c.statuslineChain;
     if (c.statuslinePrev && typeof c.statuslinePrev === 'object') settings.statuslinePrev = c.statuslinePrev;
   } catch (_) {} // no config yet, or unreadable — stay on the defaults
   holdKey = settings.shortcut.code;
@@ -90,7 +89,6 @@ function saveConfig() {
 function shortcutProvider() {
   if (gnomeShortcut.isGnome()) {
     return {
-      desktop: 'GNOME',
       mod: gnomeShortcut,
       // touching the poke file costs ~10ms per key event, which is what
       // lets tap/hold detection stay snappy (vs ~0.5s app spawns)
@@ -99,7 +97,6 @@ function shortcutProvider() {
   }
   if (kdeShortcut.isKde()) {
     return {
-      desktop: 'KDE',
       mod: kdeShortcut,
       // .desktop Exec fields hate quoting, so bake the resolved path in
       command: `touch ${POKE_FILE}`,
@@ -129,7 +126,7 @@ async function setShortcut(sc) {
   settings.shortcut = sc;
   holdKey = sc.code;
   saveConfig();
-  if (tray) tray.setToolTip(`vibecheck — ${keys.name(sc)}: Claude status`);
+  if (tray) tray.setToolTip(`vibecheck — ${keys.name(sc)}: usage + Claude status`);
   await syncSystemBinding();
 }
 
@@ -231,7 +228,6 @@ function limitsInstall() {
     const prev = claude.statusLine;
     if (prev && !isShimCommand(prev)) {
       settings.statuslinePrev = prev; // restored on disable
-      settings.statuslineChain = typeof prev.command === 'string' ? prev.command : null;
       saveConfig();
     }
 
@@ -267,7 +263,6 @@ function limitsUninstall() {
     return { ok: false, error: 'uninstall failed: ' + err.message };
   }
   settings.statuslinePrev = null;
-  settings.statuslineChain = null;
   saveConfig();
   return { ok: true };
 }
@@ -300,9 +295,8 @@ function readLimitsFile() {
   } catch (_) { return null; } // absent or malformed — pill falls back to token counts
 }
 
-function readLimits() {
+function readLimits(raw = readLimitsFile()) {
   try {
-    const raw = readLimitsFile();
     const now = Date.now();
     if (!raw || !raw.updated_at || now - raw.updated_at > LIMITS_STALE_MS) return null;
     const pick = (w) => {
@@ -346,8 +340,7 @@ function weekWindow() {
 // straight from the file, not readLimits(): a reset moment that has already
 // passed is still a valid anchor (weekWindow walks it forward), and it's
 // worth keeping even once the percentages themselves have gone stale
-function learnWeekReset() {
-  const raw = readLimitsFile();
+function learnWeekReset(raw = readLimitsFile()) {
   const secs = raw && raw.seven_day && raw.seven_day.resets_at;
   if (typeof secs !== 'number') return;
   const at = secs * 1000;
@@ -358,8 +351,9 @@ function learnWeekReset() {
 }
 
 function sendUsage() {
-  learnWeekReset();
-  const limits = readLimits();
+  const raw = readLimitsFile(); // one read feeds both
+  learnWeekReset(raw);
+  const limits = readLimits(raw);
   const local = usage.summary(weekWindow());
   const data =
     local || limits ? { ...(local || { session: null, week: null }), limits } : null;
@@ -634,7 +628,7 @@ function createWindow() {
 function createTray() {
   const icon = nativeImage.createFromBuffer(Buffer.from(TRAY_PNG, 'base64'));
   tray = new Tray(icon.resize({ width: 16, height: 16 }));
-  tray.setToolTip(`vibecheck — ${keys.name(settings.shortcut)}: Claude status`);
+  tray.setToolTip(`vibecheck — ${keys.name(settings.shortcut)}: usage + Claude status`);
   buildTrayMenu();
 }
 

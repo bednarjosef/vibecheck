@@ -38,7 +38,7 @@ function linux() {
   fs.writeFileSync(
     path.join(appsDir, 'vibecheck.desktop'),
     `[Desktop Entry]\nType=Application\nName=vibecheck\n` +
-      `Comment=Tap a key — Claude's live status\n` +
+      `Comment=Tap a key — your Claude usage and status\n` +
       `Exec="${process.execPath}" "${app.getAppPath()}" --no-sandbox\n` +
       `Icon=${icon}\nTerminal=false\nCategories=Utility;\nStartupNotify=false\n`
   );
@@ -81,7 +81,7 @@ function win() {
     `$s.TargetPath = '${process.execPath}'; ` +
     `$s.Arguments = '"${app.getAppPath()}"'; ` +
     `$s.IconLocation = '${ico}'; ` +
-    `$s.Description = "Tap a key - Claude's live status"; ` +
+    `$s.Description = "Tap a key - your Claude usage and status"; ` +
     `$s.Save()`;
   execFile('powershell', ['-NoProfile', '-Command', script], () => {});
 }

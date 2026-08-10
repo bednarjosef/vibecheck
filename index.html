@@ -301,14 +301,12 @@
   #affected.has { display: inline; }
 
   /* ── Claude Code usage ────────────────────────────────────────────
-     One line per window, and every line the same shape: what it is, how
-     full it is, the figure, when it comes back. Nothing here appears or
-     disappears — a fact you have to hunt for is worse than no fact. */
-  /* One grid, both rows: every column takes exactly the width of its widest
-     cell, so the card can't be any narrower without breaking alignment. */
-  /* The last column takes the slack, so when a long incident title makes the
-     card wide the times ride out to the right edge instead of leaving a hole
-     under it. With nothing to absorb, 1fr collapses and the card stays tight. */
+     One grid, one row per window, every row the same shape: how full it
+     is, the figure, the local tally, how long it has left. Columns take
+     exactly the width of their widest cell, so the card can't be narrower
+     without breaking alignment — and the last one takes the slack, so a
+     long incident title pulls the times out to the right edge instead of
+     leaving a hole under it. Nothing here appears or disappears. */
   #usage {
     display: none;
     grid-template-columns: auto auto auto 1fr;
@@ -318,51 +316,28 @@
     white-space: nowrap;
   }
 
-  /* no local token counts to sit beside the percentages */
+  #usage.has { display: grid; }
+
+  /* no local tally beside the percentages */
   #usage.notoks { grid-template-columns: auto auto 1fr; }
 
   /* token counts have no denominator, so there's no bar to draw — and the
-     count is already the headline figure, so no second column either */
+     count is already the figure, so no second column either */
   #usage.nobars.notoks { grid-template-columns: auto 1fr; }
 
-  /* One quiet tier, not three. The tally and the clock are separated by
-     where they sit — tight to the figure vs out at the right edge — so they
-     don't also need to differ in weight. Ranking things by nudging opacity
-     reads as indecision; position does the job for free. */
+  /* the row and the meter are groupings for the markup's sake — the grid
+     needs to see the cells themselves */
+  .grp, .m { display: contents; }
+
+  /* One quiet tier, not two nearly-alike ones. The tally and the clock are
+     separated by where they sit — tight to the figure vs out at the right
+     edge — so they don't also need to differ in weight. */
   .tok, .when {
     font-size: 11px;
     letter-spacing: 0.04em;
     color: var(--dim);
     opacity: 0.5;
     font-variant-numeric: tabular-nums;
-  }
-
-  /* this machine's own tally, beside the account-wide percentage */
-  .tok { letter-spacing: 0.04em; }
-
-  #usage.has { display: grid; }
-
-  /* the row and the meter are groupings for the markup's sake — the grid
-     needs to see the four cells themselves */
-  .grp, .m { display: contents; }
-
-  /* Row labels are gone: the time column names the row on its own — the
-     session is measured in hours, the week in days. Put them back by
-     restoring the .lbl cell in lineHTML() and the fourth grid column.
-  .lbl {
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    text-transform: lowercase;
-    color: var(--dim);
-    opacity: 0.6;
-  } */
-
-
-  .divider {
-    flex: none;
-    width: 1px;
-    height: 14px;
-    background: rgba(255, 255, 255, 0.14);
   }
 
   /* Usage runs on its own ramp: the status colors belong to Claude's health,
@@ -391,7 +366,6 @@
      quantised to 10% so it never shimmers by a pixel as the number ticks */
   .m .ticks {
     position: relative;
-    flex: none;
     width: 40px; height: 9px;
     --pitch: repeating-linear-gradient(90deg, #000 0 3px, transparent 3px 4px);
   }
@@ -522,44 +496,30 @@
 
   // one window: the real /usage percentage when the shim is feeding us,
   // the local token count when it isn't
-  function readWindow(pctSrc, localSrc) {
+  function readWindow(pctSrc, localSrc, whenIdle) {
     if (!pctSrc && !localSrc) return null;
     const pct = pctSrc ? pctSrc.pct : null;
+    const resetAt = (pctSrc && pctSrc.resetAt) || (localSrc && localSrc.resetAt) || null;
     return {
       pct,
       label: pct !== null ? pct + '%' : fmtTokens(localSrc.tokens),
       // the local tally only earns a column when it isn't already the figure
       tokens: pct !== null && localSrc ? fmtTokens(localSrc.tokens) : null,
       tone: pct === null ? '' : pct >= 95 ? 'hot' : pct >= 80 ? 'warm' : '',
-      resetAt: (pctSrc && pctSrc.resetAt) || (localSrc && localSrc.resetAt) || null,
+      when: fmtLeft(resetAt) || whenIdle,
     };
   }
 
-  // A bar is a fraction of something. Percentages have a denominator; raw
-  // token counts don't, so in that mode there's no bar to draw — just the
-  // figure. The empty cell keeps the columns lined up if only one of the
-  // two windows is reporting a percentage.
-  const meterHTML = (w, bars, toks) =>
-    `<span class="m ${w.tone}" style="--p:${w.pct === null ? 0 : w.pct}">` +
-    (bars ? (w.pct === null ? '<span></span>' : '<span class="ticks"></span>') : '') +
-    `<span class="n">${w.label}</span>` +
-    (toks ? `<span class="tok">${w.tokens || ''}</span>` : '') +
-    '</span>';
-
-  // Every line the same shape, so the eye can read down the columns:
-  // how full · the figure · when it comes back. The session is always first
-  // and always measured in hours; the week follows, in days.
-  function lineHTML(win, when, bars, toks) {
-    if (!win) return '';
-    return (
-      `<span class="grp">${meterHTML(win, bars, toks)}` +
-      `<span class="when">${when(win.resetAt)}</span></span>`
-    );
-  }
-
-  const usageHTML = (s, w, bars, toks) =>
-    lineHTML(s, (at) => fmtLeft(at) || 'idle', bars, toks) +
-    lineHTML(w, (at) => fmtLeft(at) || 'rolling', bars, toks);
+  // Every row the same shape, so the eye reads down the columns: how full ·
+  // the figure · this machine's tally · how long it has left. A bar is a
+  // fraction of something, so token counts don't get one — and the empty
+  // cell keeps the columns aligned when only one window has a percentage.
+  const rowHTML = (r, bars, toks) =>
+    `<span class="grp"><span class="m ${r.tone}" style="--p:${r.pct || 0}">` +
+    (bars ? (r.pct === null ? '<span></span>' : '<span class="ticks"></span>') : '') +
+    `<span class="n">${r.label}</span>` +
+    (toks ? `<span class="tok">${r.tokens || ''}</span>` : '') +
+    `</span><span class="when">${r.when}</span></span>`;
 
   function renderUsage() {
     if (!usageData) {
@@ -567,14 +527,16 @@
       return;
     }
     const lim = usageData.limits || {};
-    const s = readWindow(lim.session, usageData.session);
-    const w = readWindow(lim.week, usageData.week);
-    const bars = (s && s.pct !== null) || (w && w.pct !== null);
-    const toks = !!((s && s.tokens) || (w && w.tokens));
-    usageEl.innerHTML = s || w ? usageHTML(s, w, bars, toks) : '';
+    const rows = [
+      readWindow(lim.session, usageData.session, 'idle'),
+      readWindow(lim.week, usageData.week, 'rolling'),
+    ].filter(Boolean);
+    const bars = rows.some((r) => r.pct !== null);
+    const toks = rows.some((r) => r.tokens);
+    usageEl.innerHTML = rows.map((r) => rowHTML(r, bars, toks)).join('');
     usageEl.classList.toggle('nobars', !bars);
     usageEl.classList.toggle('notoks', !toks);
-    usageEl.classList.toggle('has', !!(s || w));
+    usageEl.classList.toggle('has', rows.length > 0);
     balance();
   }
 
