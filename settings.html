@@ -176,7 +176,7 @@
         </div>
       </div>
       <div class="row">
-        <div><div class="lbl">Real limit %</div><div class="sub" id="limits-sub">shows /usage percentages via a Claude Code status-line shim</div></div>
+        <div><div class="lbl">Real limit %</div><div class="sub" id="limits-sub">/usage percentages via a Claude Code status-line shim · on automatically</div></div>
         <input type="checkbox" id="limitsSync" />
       </div>
       <div class="row">
@@ -261,7 +261,7 @@
     $('limits-sub').textContent = r.ok
       ? r.installed
         ? 'installed — updates with your next Claude Code reply'
-        : 'shows /usage percentages via a Claude Code status-line shim'
+        : 'off — your previous status line is restored'
       : r.error;
   });
   function sendWeeklyReset() {

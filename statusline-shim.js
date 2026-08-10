@@ -43,6 +43,7 @@ process.stdin.on('end', () => {
   if (chain) {
     const { spawn } = require('child_process');
     const child = spawn(chain, { shell: true, stdio: ['pipe', 'inherit', 'inherit'] });
+    child.stdin.on('error', () => {}); // chained command may exit without reading stdin
     child.stdin.end(input);
     child.on('error', () => process.exit(0));
     child.on('exit', (code) => process.exit(code || 0));

@@ -52,6 +52,7 @@ const settings = {
   weeklyReset: null,     // { day: 0-6 Sun-Sat, hour: 0-23 } or null = rolling 7 days
   statuslineChain: null, // original statusline command the shim defers to
   statuslinePrev: null,  // original statusLine settings object, restored on disable
+  limitsSetup: false,    // auto-setup ran (or the user chose) — don't re-decide for them
 };
 let holdKey = UiohookKey[DEFAULT_KEY];
 
@@ -59,7 +60,7 @@ function loadConfig() {
   try {
     const c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
     if (typeof c.key === 'string' && UiohookKey[c.key] !== undefined) settings.key = c.key;
-    for (const k of ['autoReveal', 'sound', 'autostart']) {
+    for (const k of ['autoReveal', 'sound', 'autostart', 'limitsSetup']) {
       if (typeof c[k] === 'boolean') settings[k] = c[k];
     }
     if (typeof c.displayId === 'number') settings.displayId = c.displayId;
@@ -287,6 +288,28 @@ function limitsUninstall() {
   settings.statuslineChain = null;
   saveConfig();
   return { ok: true };
+}
+
+// default-on: first launch with Claude Code present wires the shim up by
+// itself. Runs once — after that (or after any manual toggle) the choice
+// is the user's and stays untouched. Failures stay quiet and retry next
+// launch. When already installed, just keep the deployed shim current.
+function autoSetupLimits() {
+  if (!fs.existsSync(path.dirname(CLAUDE_SETTINGS))) return; // no Claude Code here
+  if (limitsInstalled()) {
+    try { fs.copyFileSync(SHIM_SRC, SHIM_DEST); } catch (_) {}
+    if (!settings.limitsSetup) {
+      settings.limitsSetup = true;
+      saveConfig();
+    }
+    return;
+  }
+  if (settings.limitsSetup) return;
+  if (limitsInstall().ok) {
+    settings.limitsSetup = true;
+    saveConfig();
+    sendUsage();
+  }
 }
 
 function readLimits() {
@@ -769,6 +792,8 @@ ipcMain.handle('settings:set', async (_e, patch) => {
 
 ipcMain.handle('limits:set', (_e, on) => {
   const r = on ? limitsInstall() : limitsUninstall();
+  settings.limitsSetup = true; // an explicit choice — auto-setup stands down
+  saveConfig();
   sendUsage(); // reflect the change in pill + tray right away
   return { ...r, installed: limitsInstalled() };
 });
@@ -845,6 +870,7 @@ if (!app.requestSingleInstanceLock()) {
     }
     fetchStatus();
     setInterval(fetchStatus, POLL_MS);
+    autoSetupLimits();
     refreshUsage();
     setInterval(refreshUsage, POLL_MS);
     watchLimits();

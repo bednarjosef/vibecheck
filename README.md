@@ -64,9 +64,10 @@ Tray → **Settings…** opens a small panel:
 - **Weekly reset** — anchor the weekly number to your plan's actual reset
   moment (copy it from `/usage` in Claude Code); unset, it's a rolling
   7-day total
-- **Real limit %** — swap the token counts for your actual `/usage`
-  percentages (`SESSION 34% · WEEK 62%`) via a tiny Claude Code
-  status-line shim — one click, [details below](#usage-in-the-pill)
+- **Real limit %** — your actual `/usage` percentages in the pill
+  (`SESSION 34% · WEEK 62%`), set up automatically when Claude Code is
+  detected; this toggle is the off switch —
+  [details below](#usage-in-the-pill)
 - **Start at login**
 - **Ambient light** — a living glow in the status color: *Underglow* (a
   lamp wandering the bottom edge, casting light downward), *Border
@@ -115,20 +116,27 @@ Honest fine print:
   other devices don't appear. Real limit % (below) doesn't have that
   limitation.
 
-### Real limit % (opt-in)
+### Real limit % (on by default)
 
 Claude Code hands every custom [status line](https://code.claude.com/docs/en/statusline)
 script the account's true rate-limit numbers — the same percentages
-`/usage` shows. Flip **Real limit %** in Settings and vibecheck points the
-status line in your `~/.claude/settings.json` at a tiny shim (copied to
-vibecheck's own config dir, so it survives app updates). On every Claude
-Code reply the shim tees `rate_limits` into a local file for the pill,
-then hands the line straight through to whatever status-line command you
-already had — or prints nothing if you had none: it's a data tap, not a
-status line. The percentages are account-wide (other devices and claude.ai
-included), refresh as you work, and come with real reset times. No
-credentials are read, nothing leaves your machine, and switching it off
-restores your settings exactly as they were.
+`/usage` shows. On first launch with Claude Code detected, vibecheck wires
+that up by itself: the status line in `~/.claude/settings.json` is pointed
+at a tiny shim (copied to vibecheck's own config dir, so it survives app
+updates). On every Claude Code reply the shim tees `rate_limits` into a
+local file for the pill, then hands the line straight through to whatever
+status-line command you already had — or prints nothing if you had none:
+it's a data tap, not a status line. The percentages are account-wide
+(other devices and claude.ai included), refresh as you work, and come with
+real reset times.
+
+Being upfront, since this edits a Claude Code setting automatically: the
+one key touched is `statusLine`, the previous value is saved and a backup
+of the whole file is kept in vibecheck's config dir, an existing status
+line keeps working through the pass-through, and the **Real limit %**
+toggle in Settings puts everything back exactly as it was — after which
+vibecheck never touches it again. No credentials are read and nothing
+leaves your machine.
 
 ## Platform notes
 
