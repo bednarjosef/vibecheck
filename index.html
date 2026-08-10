@@ -104,6 +104,9 @@
     animation: panel-out 250ms both;
   }
 
+  /* once it's gone it's really gone — an invisible-but-painted panel keeps
+     the window's layer tree alive for nothing */
+  #panel:not(.on):not(.out) { visibility: hidden; }
 
   @keyframes panel-out {
     0%   { opacity: 1; transform: translateY(0) scale(1); animation-timing-function: ease-out; }
@@ -250,13 +253,16 @@
   #head { justify-content: center; }
   #panel.wide #head { justify-content: flex-start; }
 
-  /* the Claude spark — static, just a soft breathing pulse */
+  /* the Claude spark — static, just a soft breathing pulse. Only while the
+     pill is up: an animation on a hidden element still drives the
+     compositor at 60fps, which is most of a background app's cost. */
   #spark {
     flex: none;
     width: 17px; height: 17px;
     color: #d97757;
-    animation: breathe 2.6s ease-in-out infinite;
   }
+
+  #panel.on #spark { animation: breathe 2.6s ease-in-out infinite; }
 
   #spark svg { display: block; width: 100%; height: 100%; }
 
@@ -266,7 +272,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    #spark { animation: none; }
+    #panel.on #spark { animation: none; }
   }
 
   /* the phrase is a sentence, so it's set like one — uppercase turned every
@@ -695,6 +701,12 @@
     if (!panel.classList.contains('on')) return;
     panel.classList.remove('on');
     panel.classList.add('out');
+  });
+
+  // when the exit finishes, drop the class so the panel reaches its idle
+  // state and stops being painted at all
+  panel.addEventListener('animationend', (e) => {
+    if (e.animationName === 'panel-out') panel.classList.remove('out');
   });
 
   window.vibecheck.onChime(chime);
