@@ -15,10 +15,33 @@
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
+  /* pieces of the pill come and go with [hidden], and several of them set
+     an explicit display — which would otherwise out-specify the UA rule */
+  [hidden] { display: none !important; }
+
+  /* Bundled, not requested: a named font nobody has is how the pill ended
+     up wearing whatever each machine's default monospace happened to be.
+     JetBrains Mono ships with the app (SIL OFL 1.1, see fonts/OFL.txt), so
+     it looks the same everywhere — and it was drawn for exactly this size. */
+  @font-face {
+    font-family: 'JetBrains Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: block;
+    src: url('fonts/jetbrains-mono-400.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'JetBrains Mono';
+    font-style: normal;
+    font-weight: 600;
+    font-display: block;
+    src: url('fonts/jetbrains-mono-600.woff2') format('woff2');
+  }
+
   html, body {
     background: transparent;
     overflow: hidden;
-    font-family: "SF Mono", ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-family: 'JetBrains Mono', ui-monospace, "SF Mono", "Cascadia Mono", "DejaVu Sans Mono", monospace;
     height: 100%;
     -webkit-font-smoothing: antialiased;
     user-select: none;
@@ -47,7 +70,8 @@
   #panel {
     display: inline-flex;
     flex-direction: column;
-    padding: 10px 18px 10px 15px;
+    gap: 9px;
+    padding: 13px 20px 13px 17px;
     border-radius: 16px;
     background: rgba(15, 17, 21, 0.92);
     border: 1px solid rgba(255, 255, 255, 0.09);
@@ -79,6 +103,7 @@
   #panel.out {
     animation: panel-out 250ms both;
   }
+
 
   @keyframes panel-out {
     0%   { opacity: 1; transform: translateY(0) scale(1); animation-timing-function: ease-out; }
@@ -220,6 +245,11 @@
     gap: 10px;
   }
 
+  /* the headline sits over a table it's narrower than — centring it is what
+     makes that a title rather than a line that failed to reach the edge */
+  #head { justify-content: center; }
+  #panel.wide #head { justify-content: flex-start; }
+
   /* the Claude spark — static, just a soft breathing pulse */
   #spark {
     flex: none;
@@ -239,22 +269,22 @@
     #spark { animation: none; }
   }
 
+  /* the phrase is a sentence, so it's set like one — uppercase turned every
+     phrasing into the same shape and threw away the wording's tone */
   #word {
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    letter-spacing: 0.005em;
     color: var(--status-color, var(--unknown));
     white-space: nowrap;
   }
 
-  /* incident title (or affected components), inline — the dots carry
-     per-component severity */
+  /* incident title (or affected components), inline — Anthropic writes these
+     as sentences too, so shouting them was ours to stop */
   #affected {
     display: none;
-    font-size: 11.5px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-size: 12.5px;
+    letter-spacing: 0.01em;
     color: var(--dim);
     white-space: nowrap;
     max-width: 420px;
@@ -264,90 +294,305 @@
 
   #affected.has { display: inline; }
 
-  /* Claude Code usage — quieter than the status text; steps aside
-     whenever an incident line needs the room */
+  /* ── Claude Code usage ────────────────────────────────────────────
+     One line per window, and every line the same shape: what it is, how
+     full it is, the figure, when it comes back. Nothing here appears or
+     disappears — a fact you have to hunt for is worse than no fact. */
+  /* One grid, both rows: every column takes exactly the width of its widest
+     cell, so the card can't be any narrower without breaking alignment. */
+  /* The last column takes the slack, so when a long incident title makes the
+     card wide the times ride out to the right edge instead of leaving a hole
+     under it. With nothing to absorb, 1fr collapses and the card stays tight. */
   #usage {
     display: none;
-    font-size: 11.5px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--dim);
-    opacity: 0.62;
+    grid-template-columns: auto auto auto 1fr;
+    align-items: center;
+    column-gap: 11px;
+    row-gap: 6px;
     white-space: nowrap;
   }
 
-  #usage.has { display: inline; }
+  /* no local token counts to sit beside the percentages */
+  #usage.notoks { grid-template-columns: auto auto 1fr; }
+
+  /* token counts have no denominator, so there's no bar to draw — and the
+     count is already the headline figure, so no second column either */
+  #usage.nobars.notoks { grid-template-columns: auto 1fr; }
+
+  /* One quiet tier, not three. The tally and the clock are separated by
+     where they sit — tight to the figure vs out at the right edge — so they
+     don't also need to differ in weight. Ranking things by nudging opacity
+     reads as indecision; position does the job for free. */
+  .tok, .when {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--dim);
+    opacity: 0.5;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* this machine's own tally, beside the account-wide percentage */
+  .tok { letter-spacing: 0.04em; }
+
+  #usage.has { display: grid; }
+
+  /* the row and the meter are groupings for the markup's sake — the grid
+     needs to see the four cells themselves */
+  .grp, .m { display: contents; }
+
+  /* Row labels are gone: the time column names the row on its own — the
+     session is measured in hours, the week in days. Put them back by
+     restoring the .lbl cell in lineHTML() and the fourth grid column.
+  .lbl {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: lowercase;
+    color: var(--dim);
+    opacity: 0.6;
+  } */
 
 
+  .divider {
+    flex: none;
+    width: 1px;
+    height: 14px;
+    background: rgba(255, 255, 255, 0.14);
+  }
+
+  /* Usage runs on its own ramp: the status colors belong to Claude's health,
+     and borrowing them would weld two unrelated facts together. The neutral
+     is bright enough that the bar and its figure read as one object at every
+     value — before, they only matched once the number went amber. */
+  .m { --tone: #949cab; }
+  .m.warm { --tone: #d8a13c; }
+  .m.hot  { --tone: #e0674f; }
+
+  /* 4ch is exactly "100%" — the widest this can ever be, so the column is
+     as narrow as it can get and still never jump */
+  .m .n {
+    min-width: 4ch;
+    text-align: right;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    color: var(--ink);
+    opacity: 0.8;
+    font-variant-numeric: tabular-nums;
+  }
+  .m.warm .n,
+  .m.hot .n { color: var(--tone); opacity: 1; }
+
+  /* ten marks, lit left to right — a count rather than a length, and
+     quantised to 10% so it never shimmers by a pixel as the number ticks */
+  .m .ticks {
+    position: relative;
+    flex: none;
+    width: 40px; height: 9px;
+    --pitch: repeating-linear-gradient(90deg, #000 0 3px, transparent 3px 4px);
+  }
+  .m .ticks::before,
+  .m .ticks::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    mask-image: var(--pitch);
+    -webkit-mask-image: var(--pitch);
+  }
+  .m .ticks::before { background: rgba(255, 255, 255, 0.12); }
+  .m .ticks::after {
+    background: var(--tone);
+    width: calc(round(up, var(--p) * 0.4, 4) * 1px);
+    transition: width 260ms cubic-bezier(0.2, 0.85, 0.25, 1);
+  }
+
+  /* how long this window has left — always there, never moves */
+  .when {
+    justify-self: end;
+    min-width: 6ch;
+  }
 </style>
 </head>
 <body>
   <div id="panel">
-    <div class="row">
+    <div class="row" id="head">
       <span id="spark"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg></span>
       <span id="word">Checking&hellip;</span>
       <span id="affected"></span>
-      <span id="usage"></span>
     </div>
+    <div id="usage"></div>
   </div>
 
 <script>
+  // The colour is what tells you the severity, so the words are free to be
+  // flavour — but only where flavour belongs. Green gets to play; the worse
+  // it gets, the plainer the phrasing, because a pill that jokes during an
+  // outage is a pill you stop trusting. Kept short: the card sizes to them.
   const WORDS = {
-    none:     { word: 'Claude is fine',       color: 'var(--ok)' },
-    minor:    { word: 'Claude is wobbly',     color: 'var(--minor)' },
-    major:    { word: 'Claude is struggling', color: 'var(--major)' },
-    critical: { word: 'Claude is down',       color: 'var(--critical)' },
-    unknown:  { word: 'Can’t reach Claude', color: 'var(--unknown)' },
+    none: {
+      color: 'var(--ok)',
+      phrases: [
+        'Claude is fine',
+        'Vibe check passed',
+        'All clear',
+        'Running clean',
+        'No notes',
+        'Nothing to report',
+        'Green across',
+        'Purring along',
+        'Claude is well',
+        'Smooth sailing',
+      ],
+    },
+    minor: {
+      color: 'var(--minor)',
+      phrases: ['Claude is wobbly', 'A little rough', 'Minor turbulence', 'Not quite right'],
+    },
+    major: {
+      color: 'var(--major)',
+      phrases: ['Claude is struggling', 'Things are rough', 'Badly degraded'],
+    },
+    critical: {
+      color: 'var(--critical)',
+      phrases: ['Claude is down', 'Everything is down', 'Total outage'],
+    },
+    unknown: {
+      color: 'var(--unknown)',
+      phrases: ['Can’t reach Claude', 'No signal', 'Status unknown'],
+    },
   };
 
+  // never the same phrase twice running, per severity
+  const lastPick = {};
+
+  function pickPhrase(indicator) {
+    const list = (WORDS[indicator] || WORDS.unknown).phrases;
+    if (list.length < 2) return list[0];
+    let i;
+    do { i = Math.floor(Math.random() * list.length); } while (i === lastPick[indicator]);
+    lastPick[indicator] = i;
+    return list[i];
+  }
+
+  // The phrase is rolled when the pill is summoned or the status changes —
+  // never on a background re-render, so it can't shuffle while you're
+  // holding the key and reading it.
+  let phrase = null;
+  let phraseFor = null;
+
+  function phraseFrom(indicator, reroll) {
+    if (reroll || phraseFor !== indicator || !phrase) {
+      phrase = pickPhrase(indicator);
+      phraseFor = indicator;
+    }
+    return phrase;
+  }
+
   const panel = document.getElementById('panel');
+  const headEl = document.getElementById('head');
   const wordEl = document.getElementById('word');
   const affectedEl = document.getElementById('affected');
   const usageEl = document.getElementById('usage');
   let usageData = null;
+  let statusData = null;
 
-  function renderUsage() {
-    // an incident line owns the pill — usage yields the space
-    if (!usageData || affectedEl.classList.contains('has')) {
-      usageEl.classList.remove('has');
-      return;
-    }
-    const fmt = (n) =>
-      n >= 1e9
-        ? (n >= 1e10 ? Math.round(n / 1e9) : parseFloat((n / 1e9).toFixed(1))) + 'B'
-        : n >= 1e6
-          ? (n >= 1e7 ? Math.round(n / 1e6) : parseFloat((n / 1e6).toFixed(1))) + 'M'
-          : n >= 1000
-            ? Math.round(n / 1000) + 'K'
-            : String(n);
-    // real /usage percentages (statusline shim) beat local token estimates
-    const lim = usageData.limits;
-    const parts = [];
-    if (lim && lim.session) parts.push(`session ${lim.session.pct}%`);
-    else if (usageData.session) parts.push(`session ${fmt(usageData.session.tokens)}`);
-    if (lim && lim.week) parts.push(`week ${lim.week.pct}%`);
-    else if (usageData.week) parts.push(`week ${fmt(usageData.week.tokens)}`);
-    if (!parts.length) {
-      usageEl.classList.remove('has');
-      return;
-    }
-    usageEl.textContent = '· ' + parts.join(' · ');
-    usageEl.classList.add('has');
+  // tokens read well at three digits max: 812 → 45K → 1.2M → 38M
+  const fmtTokens = (n) =>
+    n >= 1e9
+      ? (n >= 1e10 ? Math.round(n / 1e9) : parseFloat((n / 1e9).toFixed(1))) + 'B'
+      : n >= 1e6
+        ? (n >= 1e7 ? Math.round(n / 1e6) : parseFloat((n / 1e6).toFixed(1))) + 'M'
+        : n >= 1000
+          ? Math.round(n / 1000) + 'K'
+          : String(n);
+
+  // how long a window has left, in its two largest units: 23m · 2h 14m · 5d 5h
+  function fmtLeft(until) {
+    if (!until) return '';
+    const mins = Math.round((until - Date.now()) / 60000);
+    if (mins <= 0) return '';
+    if (mins < 60) return mins + 'm';
+    if (mins < 1440) return Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm';
+    return Math.floor(mins / 1440) + 'd ' + Math.floor((mins % 1440) / 60) + 'h';
   }
 
-  function render(data) {
+  // one window: the real /usage percentage when the shim is feeding us,
+  // the local token count when it isn't
+  function readWindow(pctSrc, localSrc) {
+    if (!pctSrc && !localSrc) return null;
+    const pct = pctSrc ? pctSrc.pct : null;
+    return {
+      pct,
+      label: pct !== null ? pct + '%' : fmtTokens(localSrc.tokens),
+      // the local tally only earns a column when it isn't already the figure
+      tokens: pct !== null && localSrc ? fmtTokens(localSrc.tokens) : null,
+      tone: pct === null ? '' : pct >= 95 ? 'hot' : pct >= 80 ? 'warm' : '',
+      resetAt: (pctSrc && pctSrc.resetAt) || (localSrc && localSrc.resetAt) || null,
+    };
+  }
+
+  // A bar is a fraction of something. Percentages have a denominator; raw
+  // token counts don't, so in that mode there's no bar to draw — just the
+  // figure. The empty cell keeps the columns lined up if only one of the
+  // two windows is reporting a percentage.
+  const meterHTML = (w, bars, toks) =>
+    `<span class="m ${w.tone}" style="--p:${w.pct === null ? 0 : w.pct}">` +
+    (bars ? (w.pct === null ? '<span></span>' : '<span class="ticks"></span>') : '') +
+    `<span class="n">${w.label}</span>` +
+    (toks ? `<span class="tok">${w.tokens || ''}</span>` : '') +
+    '</span>';
+
+  // Every line the same shape, so the eye can read down the columns:
+  // how full · the figure · when it comes back. The session is always first
+  // and always measured in hours; the week follows, in days.
+  function lineHTML(win, when, bars, toks) {
+    if (!win) return '';
+    return (
+      `<span class="grp">${meterHTML(win, bars, toks)}` +
+      `<span class="when">${when(win.resetAt)}</span></span>`
+    );
+  }
+
+  const usageHTML = (s, w, bars, toks) =>
+    lineHTML(s, (at) => fmtLeft(at) || 'idle', bars, toks) +
+    lineHTML(w, (at) => fmtLeft(at) || 'rolling', bars, toks);
+
+  function renderUsage() {
+    if (!usageData) {
+      usageEl.classList.remove('has');
+      return;
+    }
+    const lim = usageData.limits || {};
+    const s = readWindow(lim.session, usageData.session);
+    const w = readWindow(lim.week, usageData.week);
+    const bars = (s && s.pct !== null) || (w && w.pct !== null);
+    const toks = !!((s && s.tokens) || (w && w.tokens));
+    usageEl.innerHTML = s || w ? usageHTML(s, w, bars, toks) : '';
+    usageEl.classList.toggle('nobars', !bars);
+    usageEl.classList.toggle('notoks', !toks);
+    usageEl.classList.toggle('has', !!(s || w));
+    balance();
+  }
+
+  // whichever part is wider sets the card's width; the narrower one centres
+  // under it, unless that's the headline during an incident — then the
+  // headline owns the width and the table reads as detail beneath it
+  function balance() {
+    panel.classList.toggle('wide', headEl.scrollWidth > usageEl.scrollWidth + 1);
+  }
+
+  function render(data, reroll) {
+    statusData = data;
     const s = WORDS[data.indicator] || WORDS.unknown;
     panel.style.setProperty('--status-color', s.color);
-    wordEl.textContent = s.word;
+    wordEl.textContent = phraseFrom(data.indicator, reroll);
 
     const bad = data.components.filter((c) => c.status !== 'operational');
     if (data.incident && data.indicator !== 'none') {
       // the human-written incident title beats raw component states
-      affectedEl.textContent = '· ' + data.incident.name;
+      affectedEl.textContent = data.incident.name;
       affectedEl.classList.add('has');
     } else {
       affectedEl.textContent = bad.length
-        ? '· ' + bad.map((c) => c.name.replace(/\s*\(.*?\)/, '')).join(' + ')
+        ? bad.map((c) => c.name.replace(/\s*\(.*?\)/, '')).join(' + ')
         : '';
       affectedEl.classList.toggle('has', bad.length > 0);
     }
@@ -431,16 +676,27 @@
     setTimeout(() => ctx.close(), 3000);
   }
 
-  window.vibecheck.onStatus(render);
+  // the countdown only has to be honest to the minute, and only while
+  // anyone can see it
+  let ticker = null;
+
+  window.vibecheck.onStatus((data) => render(data));
   window.vibecheck.onReveal(() => {
     panel.classList.remove('out');
     panel.classList.add('on');
+    if (statusData) render(statusData, true); // a fresh phrase each summoning
+    renderUsage();
+    clearInterval(ticker);
+    ticker = setInterval(renderUsage, 20_000);
   });
   window.vibecheck.onConceal(() => {
+    clearInterval(ticker);
+    ticker = null;
     if (!panel.classList.contains('on')) return;
     panel.classList.remove('on');
     panel.classList.add('out');
   });
+
   window.vibecheck.onChime(chime);
   window.vibecheck.onUsage((d) => {
     usageData = d;
