@@ -124,8 +124,8 @@ status line in your `~/.claude/settings.json` at a tiny shim (copied to
 vibecheck's own config dir, so it survives app updates). On every Claude
 Code reply the shim tees `rate_limits` into a local file for the pill,
 then hands the line straight through to whatever status-line command you
-already had — or prints a minimal `model · dir · 5h % · wk %` line if you
-had none. The percentages are account-wide (other devices and claude.ai
+already had — or prints nothing if you had none: it's a data tap, not a
+status line. The percentages are account-wide (other devices and claude.ai
 included), refresh as you work, and come with real reset times. No
 credentials are read, nothing leaves your machine, and switching it off
 restores your settings exactly as they were.

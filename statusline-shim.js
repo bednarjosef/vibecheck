@@ -2,8 +2,9 @@
 // vibecheck statusline shim — Claude Code runs this as its status line.
 // It tees rate_limits (the real /usage percentages, which Claude Code hands
 // to every statusline script) into <config>/limits.json for the pill, then
-// defers to the user's original statusline command — or prints a minimal
-// line of its own when there wasn't one. No credentials, no network.
+// defers to the user's original statusline command — or prints nothing
+// when there wasn't one: it's a data tap, not a status line.
+// No credentials, no network.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -48,15 +49,5 @@ process.stdin.on('end', () => {
     return;
   }
 
-  // no original statusline to hand off to — print a quiet one
-  const seg = [];
-  if (j.model && j.model.display_name) seg.push(j.model.display_name);
-  if (j.workspace && j.workspace.current_dir) seg.push(path.basename(j.workspace.current_dir));
-  const pct = (w) =>
-    rl && rl[w] && typeof rl[w].used_percentage === 'number'
-      ? Math.round(rl[w].used_percentage) + '%'
-      : null;
-  if (pct('five_hour')) seg.push('5h ' + pct('five_hour'));
-  if (pct('seven_day')) seg.push('wk ' + pct('seven_day'));
-  process.stdout.write('\x1b[2m' + seg.join(' · ') + '\x1b[0m');
+  // no original statusline to hand off to — stay invisible
 });
