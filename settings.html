@@ -13,10 +13,26 @@
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
+  /* same bundled face as the pill — see fonts/OFL.txt */
+  @font-face {
+    font-family: 'JetBrains Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: block;
+    src: url('fonts/jetbrains-mono-400.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'JetBrains Mono';
+    font-style: normal;
+    font-weight: 600;
+    font-display: block;
+    src: url('fonts/jetbrains-mono-600.woff2') format('woff2');
+  }
+
   html, body {
     background: transparent;
     overflow: hidden;
-    font-family: "SF Mono", ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    font-family: 'JetBrains Mono', ui-monospace, "SF Mono", "Cascadia Mono", "DejaVu Sans Mono", monospace;
     height: 100%;
     -webkit-font-smoothing: antialiased;
     user-select: none;

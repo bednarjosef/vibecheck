@@ -31,6 +31,11 @@ Linux, an app bundle in ~/Applications on macOS, a Start Menu shortcut on
 Windows — so from then on you can start it like anything else (and flip on
 **Start at login** in Settings to never think about it again).
 
+> vibecheck itself is ~420 kB, but it's an Electron app, so npm pulls a
+> private Chromium with it: about **270 MB on disk** after install. The
+> [Releases](https://github.com/bednarjosef/vibecheck/releases) builds are
+> the same story in one file (~100 MB compressed).
+
 Prefer a classic installer? [Releases](https://github.com/bednarjosef/vibecheck/releases)
 has AppImage/deb for Linux, dmg for macOS, and a Windows setup. Or run from
 source:
@@ -174,5 +179,9 @@ leaves your machine.
 [PolyForm Noncommercial 1.0.0](LICENSE.md) — the source is open and free
 for any personal, educational, or nonprofit use: run it, fork it, tinker,
 share. Commercial use needs permission from the author.
+
+The pill is set in [JetBrains Mono](https://www.jetbrains.com/lp/mono/),
+bundled with the app under the SIL Open Font License 1.1
+([fonts/OFL.txt](fonts/OFL.txt)) so it looks the same on every machine.
 
 Not affiliated with Anthropic.
