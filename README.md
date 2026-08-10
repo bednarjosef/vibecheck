@@ -37,7 +37,9 @@ Windows — so from then on you can start it like anything else (and flip on
 > the same story in one file (~100 MB compressed).
 
 Prefer a classic installer? [Releases](https://github.com/bednarjosef/vibecheck/releases)
-has AppImage/deb for Linux, dmg for macOS, and a Windows setup. Or run from
+has AppImage/deb for Linux, a dmg for macOS, and a Windows setup — each in
+both x64 and arm64, so Intel Macs, Apple Silicon, ARM laptops and Raspberry
+Pis are all covered. Or run from
 source:
 
 ```bash

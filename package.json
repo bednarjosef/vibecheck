@@ -1,6 +1,6 @@
 {
   "name": "vibecheck-app",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Tap a key, see Claude's live status. Let go, it melts away.",
   "main": "main.js",
   "scripts": {
@@ -33,22 +33,47 @@
     ],
     "linux": {
       "target": [
-        "AppImage",
-        "deb"
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ],
       "category": "Utility",
       "synopsis": "Tap a key, see Claude's live status",
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "executableName": "vibecheck"
     },
     "mac": {
       "target": [
-        "dmg"
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
       ],
       "category": "public.app-category.utilities"
     },
     "win": {
       "target": [
-        "nsis"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ]
     },
     "publish": {
@@ -57,8 +82,17 @@
       "repo": "vibecheck",
       "releaseType": "release"
     },
+    "appImage": {
+      "artifactName": "vibecheck-${version}-${arch}.${ext}"
+    },
     "deb": {
       "artifactName": "vibecheck_${version}_${arch}.${ext}"
+    },
+    "dmg": {
+      "artifactName": "vibecheck-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "artifactName": "vibecheck-Setup-${version}-${arch}.${ext}"
     }
   },
   "dependencies": {
