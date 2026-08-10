@@ -637,7 +637,8 @@ async function fetchStatus() {
   }
   if (win && !win.isDestroyed()) win.webContents.send('status', lastData);
 
-  // react to changes (ignore network blips in either direction)
+  // react to changes — a change in Claude's health, and separately losing
+  // sight of it, which is a different kind of news and reads on its own path
   const prev = prevIndicator;
   prevIndicator = lastData.indicator;
   if (prev && prev !== lastData.indicator && prev !== 'unknown' && lastData.indicator !== 'unknown') {
@@ -645,6 +646,25 @@ async function fetchStatus() {
     if (settings.sound) sendChime(worse ? 'bad' : 'good');
     if (settings.autoReveal) autoPeek(worse ? 8_000 : 5_000);
   }
+  noteReachability(lastData.indicator === 'unknown');
+}
+
+// Losing status.claude.com is worth saying — but not on the first missed
+// poll, or the pill would let itself in over a wifi hiccup. Two in a row is
+// an outage rather than a blip. The recovery is announced too: a card that
+// says it can't see Claude and then never takes it back is worse than one
+// that never spoke up.
+const OFFLINE_POLLS = 2;
+let misses = 0;
+let toldOffline = false;
+
+function noteReachability(offline) {
+  misses = offline ? misses + 1 : 0;
+  if (offline === toldOffline) return;
+  if (offline && misses < OFFLINE_POLLS) return;
+  toldOffline = offline;
+  if (settings.sound) sendChime(offline ? 'bad' : 'good');
+  if (settings.autoReveal) autoPeek(offline ? 6_000 : 5_000);
 }
 
 function createWindow() {
