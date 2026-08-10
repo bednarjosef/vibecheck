@@ -72,11 +72,34 @@
   .lbl { font-size: 12.5px; color: var(--ink); }
   .sub { margin-top: 3px; font-size: 10.5px; color: var(--faint); line-height: 1.5; }
 
-  .pair { display: flex; gap: 6px; flex: none; }
-  .pair select { max-width: none; }
-  #wrDay { width: 118px; }
-  #wrHour { width: 78px; }
   select:disabled { opacity: 0.45; }
+
+  /* the key recorder: shows the current key, listens for the next one */
+  #key {
+    -webkit-app-region: no-drag;
+    flex: none;
+    min-width: 96px;
+    background: #1b1f26;
+    color: var(--ink);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font: inherit; font-size: 12px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 140ms ease, color 140ms ease;
+  }
+  #key:hover { border-color: rgba(255, 255, 255, 0.22); }
+  #key.listening {
+    border-color: var(--coral);
+    color: var(--coral);
+    animation: listening 1.4s ease-in-out infinite;
+  }
+
+  @keyframes listening {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
 
   select {
     -webkit-app-region: no-drag;
@@ -113,14 +136,6 @@
   input[type="checkbox"]:checked { background: rgba(62, 207, 142, 0.35); }
   input[type="checkbox"]:checked::after { transform: translateX(16px); background: var(--ok); }
 
-  footer {
-    margin-top: auto;
-    padding: 10px 18px 14px;
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    color: var(--faint);
-    text-align: center;
-  }
 </style>
 </head>
 <body>
@@ -132,11 +147,7 @@
     <main>
       <div class="row">
         <div><div class="lbl">Shortcut key</div><div class="sub" id="key-sub">tap toggles · hold peeks</div></div>
-        <select id="key"></select>
-      </div>
-      <div class="row" id="system-row" hidden>
-        <div><div class="lbl">System-wide key</div><div class="sub">registers the key with your desktop so it works in every app</div></div>
-        <input type="checkbox" id="systemBind" />
+        <button id="key">F8</button>
       </div>
       <div class="row">
         <div><div class="lbl">Auto-reveal on change</div><div class="sub">peeks when status flips, and on recovery</div></div>
@@ -156,27 +167,7 @@
         </select>
       </div>
       <div class="row">
-        <div><div class="lbl">Show usage</div><div class="sub">session + week tokens from Claude Code's local logs</div></div>
-        <input type="checkbox" id="usage" />
-      </div>
-      <div class="row">
-        <div><div class="lbl">Weekly reset</div><div class="sub">set it to match /usage in Claude Code</div></div>
-        <div class="pair">
-          <select id="wrDay">
-            <option value="">Rolling</option>
-            <option value="1">Monday</option>
-            <option value="2">Tuesday</option>
-            <option value="3">Wednesday</option>
-            <option value="4">Thursday</option>
-            <option value="5">Friday</option>
-            <option value="6">Saturday</option>
-            <option value="0">Sunday</option>
-          </select>
-          <select id="wrHour"></select>
-        </div>
-      </div>
-      <div class="row">
-        <div><div class="lbl">Real limit %</div><div class="sub" id="limits-sub">/usage percentages via a Claude Code status-line shim · on automatically</div></div>
+        <div><div class="lbl">Real limit %</div><div class="sub" id="limits-sub">/usage percentages via a status-line shim</div></div>
         <input type="checkbox" id="limitsSync" />
       </div>
       <div class="row">
@@ -184,30 +175,20 @@
         <input type="checkbox" id="autostart" />
       </div>
       <div class="row">
-        <div><div class="lbl">Ambient light</div><div class="sub">how the pill glows, in the status color</div></div>
-        <select id="glow">
-          <option value="bottom">Underglow</option>
-          <option value="border">Border shimmer</option>
-          <option value="off">Off</option>
-        </select>
-      </div>
-      <div class="row">
         <div><div class="lbl">Display</div><div class="sub">where the pill appears</div></div>
         <select id="display"></select>
       </div>
     </main>
-    <footer>DATA · STATUS.CLAUDE.COM</footer>
   </div>
 
 <script>
   const $ = (id) => document.getElementById(id);
+  let keySub = 'tap toggles · hold peeks';
 
   async function init() {
     const s = await window.vc.getState();
 
-    $('key').innerHTML = s.keyChoices
-      .map((k) => `<option value="${k}"${k === s.settings.key ? ' selected' : ''}>${k}</option>`)
-      .join('');
+    $('key').textContent = s.settings.shortcut.label || 'Set a key';
 
     const opts = [`<option value="">Primary</option>`].concat(
       s.displays.map(
@@ -216,43 +197,61 @@
     );
     $('display').innerHTML = opts.join('');
 
-    if (s.systemBind.available) {
-      $('system-row').hidden = false;
-      $('systemBind').checked = s.systemBind.installed;
-    }
-    if (s.platform === 'darwin') {
-      $('key-sub').textContent = 'tap toggles · hold peeks · needs Accessibility permission';
-    }
+    if (s.platform === 'darwin') keySub += ' · needs Accessibility permission';
+    $('key-sub').textContent = keySub;
     $('autoReveal').checked = s.settings.autoReveal;
     $('sound').checked = s.settings.sound;
     $('autostart').checked = s.settings.autostart;
-    $('glow').value = s.settings.glow;
     $('soundTheme').value = s.settings.soundTheme;
-    $('usage').checked = s.settings.usage;
-
-    $('wrHour').innerHTML = Array.from(
-      { length: 24 },
-      (_, h) => `<option value="${h}">${String(h).padStart(2, '0')}:00</option>`
-    ).join('');
-    const wr = s.settings.weeklyReset;
-    $('wrDay').value = wr ? String(wr.day) : '';
-    $('wrHour').value = String(wr ? wr.hour : 17);
-    $('wrHour').disabled = !wr;
 
     $('limitsSync').checked = s.claude.limitsInstalled;
     if (!s.claude.found) {
       $('limitsSync').disabled = true;
       $('limits-sub').textContent = 'Claude Code was not found on this machine';
     }
+    fitWindow();
   }
 
-  $('key').addEventListener('change', (e) => window.vc.set({ key: e.target.value }));
+  // the window is only ever as tall as the settings it holds
+  function fitWindow() {
+    const panel = document.querySelector('#panel');
+    window.vc.fit(panel.querySelector('header').offsetHeight + panel.querySelector('main').offsetHeight);
+  }
+
+  // Record whatever key comes next — the main process listens on the global
+  // hook at the same time, so keys this window never sees still land.
+  let listening = false;
+
+  async function recordKey() {
+    if (listening) {
+      window.vc.captureCancel();
+      return;
+    }
+    listening = true;
+    $('key').classList.add('listening');
+    $('key').textContent = 'press a key…';
+    $('key-sub').textContent = 'any key, any keyboard · Esc cancels';
+    const r = await window.vc.captureKey();
+    listening = false;
+    $('key').classList.remove('listening');
+    $('key').textContent = r.label;
+    $('key-sub').textContent = r.note || keySub;
+    fitWindow();
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (!listening) return;
+    e.preventDefault();
+    if (e.key === 'Escape') window.vc.captureCancel();
+    else window.vc.captureDom({ code: e.code, key: e.key });
+  }, true);
+
+  $('key').addEventListener('click', recordKey);
   $('display').addEventListener('change', (e) =>
     window.vc.set({ displayId: e.target.value === '' ? null : Number(e.target.value) })
   );
-  $('glow').addEventListener('change', (e) => window.vc.set({ glow: e.target.value }));
   $('soundTheme').addEventListener('change', (e) => window.vc.set({ soundTheme: e.target.value }));
-  for (const id of ['systemBind', 'autoReveal', 'sound', 'autostart', 'usage']) {
+  for (const id of ['autoReveal', 'sound', 'autostart']) {
     $(id).addEventListener('change', (e) => window.vc.set({ [id]: e.target.checked }));
   }
   $('limitsSync').addEventListener('change', async (e) => {
@@ -263,17 +262,8 @@
         ? 'installed — updates with your next Claude Code reply'
         : 'off — your previous status line is restored'
       : r.error;
+    fitWindow();
   });
-  function sendWeeklyReset() {
-    const day = $('wrDay').value;
-    $('wrHour').disabled = day === '';
-    window.vc.set({
-      weeklyReset:
-        day === '' ? null : { day: Number(day), hour: Number($('wrHour').value) },
-    });
-  }
-  $('wrDay').addEventListener('change', sendWeeklyReset);
-  $('wrHour').addEventListener('change', sendWeeklyReset);
   $('close').addEventListener('click', () => window.vc.close());
 
   init();

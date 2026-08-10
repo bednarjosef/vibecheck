@@ -5,7 +5,8 @@
 
 Tap **F8** → Claude's live status pops in over whatever you're doing, like
 a little notification; tap again → it melts away. Hold F8 instead → it
-shows only while held.
+shows only while held. Rather it were another key? Settings takes any key
+you press.
 
 ![vibecheck demo](https://raw.githubusercontent.com/bednarjosef/vibecheck/main/docs/hero.gif)
 
@@ -50,29 +51,27 @@ The overlay is click-through and lives in your tray. Quit from the tray icon.
 
 Tray → **Settings…** opens a small panel:
 
-- **Shortcut key** — pick from F6–F12, ScrollLock, Pause (any `UiohookKey`
-  name also works by hand in `~/.config/vibecheck/config.json`)
-- **System-wide key (GNOME & KDE)** — one click registers the key with your
-  desktop (gsettings on GNOME, kglobalaccel on KDE Plasma 5/6) so it works
-  from anywhere, including native Wayland windows
+- **Shortcut key** — click it and press the key you want. Any key, on any
+  keyboard: F13–F24 and macro keys from external boards, media keys, the
+  numpad, a letter, whatever your desktop hasn't already claimed
 - **Auto-reveal on change** — the pill peeks on its own when the status
   flips, and again when it recovers
 - **Sound on change** — a soft two-note chime, down for bad news, up for
   recovery (off by default)
-- **Show usage** — appends your own Claude Code usage to the pill:
-  `SESSION 910K · WEEK 25M`, current 5-hour window and week
-- **Weekly reset** — anchor the weekly number to your plan's actual reset
-  moment (copy it from `/usage` in Claude Code); unset, it's a rolling
-  7-day total
 - **Real limit %** — your actual `/usage` percentages in the pill
   (`SESSION 34% · WEEK 62%`), set up automatically when Claude Code is
   detected; this toggle is the off switch —
   [details below](#usage-in-the-pill)
 - **Start at login**
-- **Ambient light** — a living glow in the status color: *Underglow* (a
-  lamp wandering the bottom edge, casting light downward), *Border
-  shimmer* (light drifting along the pill's hairline border), or *Off*
 - **Display** — which monitor the pill appears on (default: primary)
+
+No tray icon (GNOME hides them without an extension)? `vibecheck --settings`
+opens the panel — from a fresh launch or an already-running one.
+
+The key is also registered with your desktop itself — gsettings on GNOME,
+kglobalaccel on KDE Plasma 5/6 — so it works from anywhere, native Wayland
+windows included. That happens on every launch and every key change; the
+only keys left out are ones X has no name for.
 
 ## Without the key
 
@@ -97,12 +96,12 @@ whole status page.
 
 ## Usage in the pill
 
-If you use Claude Code, the pill can also carry your own numbers — how many
-tokens the current 5-hour session and the last week have burned (they're in
-the tray menu too, with reset times). This is read **entirely from Claude
-Code's local transcripts** (`~/.claude/projects/**/*.jsonl`), where every
-response records its exact token counts: nothing leaves your machine, no
-account access, no extra login.
+The pill carries your own Claude Code numbers next to the status. Real limit
+% (below) supplies them when it's on; when it isn't, they fall back to token
+counts for the current 5-hour session and the last week, read **entirely from
+Claude Code's local transcripts** (`~/.claude/projects/**/*.jsonl`), where
+every response records its exact token counts: nothing leaves your machine,
+no account access, no extra login.
 
 Honest fine print:
 
@@ -115,6 +114,10 @@ Honest fine print:
 - Token counts only see Claude Code on this machine — claude.ai chats and
   other devices don't appear. Real limit % (below) doesn't have that
   limitation.
+- The weekly window follows your account's real reset moment. Claude Code
+  reports it once (through the shim below) and vibecheck keeps it, stepping
+  it forward a week at a time — so the token counts stay on the real week
+  even with Real limit % switched off. Until it's heard once: rolling 7 days.
 
 ### Real limit % (on by default)
 
@@ -125,10 +128,14 @@ that up by itself: the status line in `~/.claude/settings.json` is pointed
 at a tiny shim (copied to vibecheck's own config dir, so it survives app
 updates). On every Claude Code reply the shim tees `rate_limits` into a
 local file for the pill, then hands the line straight through to whatever
-status-line command you already had — or prints nothing if you had none:
-it's a data tap, not a status line. The percentages are account-wide
+status-line command you already had. The percentages are account-wide
 (other devices and claude.ai included), refresh as you work, and come with
 real reset times.
+
+If you had no status line, the shim prints `press F8 to vibecheck` (or
+whatever your key is) in that row. Claude Code reserves the status-line row
+as soon as any status line is configured — printing nothing leaves it blank
+rather than gone — so the row says something useful instead.
 
 Being upfront, since this edits a Claude Code setting automatically: the
 one key touched is `statusLine`, the previous value is saved and a backup
@@ -146,8 +153,8 @@ leaves your machine.
 - **Windows** — works out of the box.
 - **Linux** — needs a compositor for window transparency (fine on GNOME/KDE).
   On **Wayland** the key hook runs through XWayland, so the plain key is only
-  seen while an X11/XWayland app has focus — use the system binding from
-  Settings (GNOME and KDE) for a shortcut that works everywhere.
+  seen while an X11/XWayland app has focus — which is why GNOME and KDE get
+  the desktop-level binding, registered for you, that works everywhere.
 
 ## How it works
 

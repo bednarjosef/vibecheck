@@ -27,6 +27,7 @@
       "desktop-integration.js",
       "launch.js",
       "usage.js",
+      "keys.js",
       "statusline-shim.js"
     ],
     "linux": {
@@ -81,6 +82,7 @@
     "desktop-integration.js",
     "launch.js",
     "usage.js",
+    "keys.js",
     "statusline-shim.js",
     "build/icon.png",
     "build/icon.icns",

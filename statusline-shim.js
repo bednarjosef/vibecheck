@@ -2,9 +2,12 @@
 // vibecheck statusline shim — Claude Code runs this as its status line.
 // It tees rate_limits (the real /usage percentages, which Claude Code hands
 // to every statusline script) into <config>/limits.json for the pill, then
-// defers to the user's original statusline command — or prints nothing
-// when there wasn't one: it's a data tap, not a status line.
-// No credentials, no network.
+// defers to the user's original statusline command.
+//
+// When there wasn't one, it prints the shortcut instead. Claude Code always
+// reserves the status-line row once a status line is configured — printing
+// nothing leaves it blank, not gone — so the row may as well say what the
+// key is. No credentials, no network.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -36,13 +39,15 @@ process.stdin.on('end', () => {
     } catch (_) {}
   }
 
-  let chain = null;
+  let config = {};
   try {
-    chain = JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8')).statuslineChain || null;
+    config = JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'));
   } catch (_) {}
-  if (chain) {
+
+  if (config.statuslineChain) {
+    // the user's own status line owns the row — hand it over untouched
     const { spawn } = require('child_process');
-    const child = spawn(chain, { shell: true, stdio: ['pipe', 'inherit', 'inherit'] });
+    const child = spawn(config.statuslineChain, { shell: true, stdio: ['pipe', 'inherit', 'inherit'] });
     child.stdin.on('error', () => {}); // chained command may exit without reading stdin
     child.stdin.end(input);
     child.on('error', () => process.exit(0));
@@ -50,5 +55,6 @@ process.stdin.on('end', () => {
     return;
   }
 
-  // no original statusline to hand off to — stay invisible
+  const key = config.shortcut && config.shortcut.label;
+  if (key) process.stdout.write(`\x1b[2mpress ${key} to vibecheck\x1b[0m\n`);
 });

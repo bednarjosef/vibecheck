@@ -4,8 +4,8 @@
 // account access, no endpoints, no auth. Sessions follow Anthropic's model:
 // a 5-hour window that opens with the first message after the previous
 // window lapsed, anchored to the top of the hour. The weekly reset moment is
-// account-specific and not in the logs, so it's user-supplied (settings) or
-// a rolling 7-day sum.
+// account-specific and not in the logs — Claude Code reports it through the
+// statusline shim, and without that it's a rolling 7-day sum.
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -128,8 +128,8 @@ function refresh() {
   return refreshing;
 }
 
-// weeklyReset: null (rolling 7 days) or { day: 0-6 (Sun-Sat), hour: 0-23 }
-function summary(weeklyReset) {
+// week: null (rolling 7 days) or the account's real window, { since, resetAt }
+function summary(week) {
   const hours = new Map();
   for (const f of files.values()) {
     for (const [h, t] of f.buckets) hours.set(h, (hours.get(h) || 0) + t);
@@ -154,19 +154,9 @@ function summary(weeklyReset) {
     session = { tokens, resetAt: end };
   }
 
-  let since = now - WEEK_MS;
-  let resetAt = null;
-  if (weeklyReset && Number.isInteger(weeklyReset.day) && Number.isInteger(weeklyReset.hour)) {
-    const d = new Date(now);
-    d.setMinutes(0, 0, 0);
-    d.setHours(weeklyReset.hour);
-    d.setDate(d.getDate() - ((d.getDay() - weeklyReset.day + 7) % 7));
-    if (d.getTime() > now) d.setDate(d.getDate() - 7);
-    since = d.getTime();
-    const r = new Date(d);
-    r.setDate(r.getDate() + 7); // calendar step, so DST can't skew the hour
-    resetAt = r.getTime();
-  }
+  const dated = week && Number.isFinite(week.since) && Number.isFinite(week.resetAt);
+  const since = dated ? week.since : now - WEEK_MS;
+  const resetAt = dated ? week.resetAt : null;
   let weekTokens = 0;
   for (const [h, t] of hours) if (h >= since) weekTokens += t;
 

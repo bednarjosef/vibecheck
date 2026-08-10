@@ -72,55 +72,15 @@
     100% { opacity: 0; transform: translateY(-32px) scale(0.94); }
   }
 
-  /* ── ambient light (settings → Ambient light) ─────────────────────
-     glow-border: a shimmer of the status color drifting along the pill's
-     own hairline border. glow-bottom: a small lamp on the bottom edge that
-     wanders, breathes, and casts a tight cone of light downward. */
-  @property --spin { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+  /* ── the underglow ────────────────────────────────────────────────
+     A small lamp on the bottom edge that wanders, breathes, and casts a
+     tight cone of light downward, in whatever color the status is. */
   @property --trace { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
   @property --erase { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
 
-  #panel.glow-border::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 16px;
-    padding: 1.5px; /* the mask keeps only this hairline band */
-    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    mask-composite: exclude;
-    opacity: 0;
-    transition: opacity 220ms ease;
-    pointer-events: none;
-    background: conic-gradient(
-      from var(--spin),
-      color-mix(in srgb, var(--status-color, var(--unknown)) 10%, transparent) 0deg,
-      color-mix(in srgb, var(--status-color, var(--unknown)) 38%, transparent) 70deg,
-      color-mix(in srgb, var(--status-color, var(--unknown)) 62%, transparent) 105deg,
-      color-mix(in srgb, var(--status-color, var(--unknown)) 38%, transparent) 140deg,
-      color-mix(in srgb, var(--status-color, var(--unknown)) 10%, transparent) 210deg,
-      color-mix(in srgb, var(--status-color, var(--unknown)) 26%, transparent) 290deg,
-      color-mix(in srgb, var(--status-color, var(--unknown)) 10%, transparent) 360deg
-    );
-  }
-
-  #panel.on.glow-border::before {
-    opacity: 1;
-    animation:
-      spin 13s linear infinite,
-      border-breathe 5.9s ease-in-out infinite;
-  }
-
-  @keyframes spin { from { --spin: 0deg } to { --spin: 360deg } }
-
-  @keyframes border-breathe {
-    0%, 100% { opacity: 0.75; }
-    45%      { opacity: 1; }
-    72%      { opacity: 0.85; }
-  }
-
   /* the lamp: a half-lens fused to the border line — flat top welded to the
      edge, thickest at center, its underside tapering away to nothing */
-  #panel.glow-bottom::before {
+  #panel::before {
     content: '';
     position: absolute;
     top: 100%; /* overlays the 1px border row: no seam, no gap */
@@ -143,7 +103,7 @@
   /* ignition: two beams leave top-center in opposite directions, trace
      around the OUTSIDE of the border, meet at the bottom — then the ring
      erases along the same path. Band thickness matches the lamp. */
-  #panel.glow-bottom::after {
+  #panel::after {
     content: '';
     position: absolute;
     inset: -1px;
@@ -170,7 +130,7 @@
     );
   }
 
-  #panel.on.glow-bottom::after {
+  #panel.on::after {
     animation: ring-intro 1000ms linear both;
   }
 
@@ -188,7 +148,7 @@
     100% { --trace: 180deg; --erase: 126deg; opacity: 0; }
   }
 
-  #panel.on.glow-bottom::before {
+  #panel.on::before {
     opacity: 1;
     animation:
       lamp-stretch 7.1s ease-in-out 700ms infinite,
@@ -221,9 +181,8 @@
     #panel { transition: opacity 120ms linear; transform: none; }
     #panel.on { animation: none; }
     #panel.out { animation: none; }
-    #panel.on.glow-border::before { animation: none; opacity: 0.8; }
-    #panel.on.glow-bottom::before { animation: none; opacity: 0.8; }
-    #panel.on.glow-bottom::after { animation: none; opacity: 0; }
+    #panel.on::before { animation: none; opacity: 0.8; }
+    #panel.on::after { animation: none; opacity: 0; }
   }
 
   .row {
@@ -276,8 +235,8 @@
 
   #affected.has { display: inline; }
 
-  /* Claude Code usage (settings → Show usage) — quieter than the status
-     text; steps aside whenever an incident line needs the room */
+  /* Claude Code usage — quieter than the status text; steps aside
+     whenever an incident line needs the room */
   #usage {
     display: none;
     font-size: 11.5px;
@@ -457,11 +416,6 @@
   window.vibecheck.onUsage((d) => {
     usageData = d;
     renderUsage();
-  });
-  window.vibecheck.onGlow((style) => {
-    panel.classList.remove('glow-border', 'glow-bottom');
-    if (style === 'border') panel.classList.add('glow-border');
-    else if (style === 'bottom') panel.classList.add('glow-bottom');
   });
 </script>
 </body>

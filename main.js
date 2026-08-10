@@ -4,14 +4,14 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { execFile } = require('child_process');
-const { uIOhook, UiohookKey } = require('uiohook-napi');
+const { uIOhook } = require('uiohook-napi');
 const gnomeShortcut = require('./gnome-shortcut');
 const kdeShortcut = require('./kde-shortcut');
 const { ensureDesktopIntegration } = require('./desktop-integration');
 const usage = require('./usage');
+const keys = require('./keys');
 
 // ── config ──────────────────────────────────────────────────────────
-const DEFAULT_KEY = 'F8';         // change via tray → Shortcut key, or config.json
 const POLL_MS = 60_000;           // background refresh interval
 const TAP_MS = 350;               // key held shorter than this = tap (toggle); longer = hold
 const RELEASE_MS = 1_000;         // slow pokes (process spawns): silence = key released
@@ -33,59 +33,43 @@ const COMPONENTS_URL = 'https://status.claude.com/api/v2/components.json';
 const INCIDENTS_URL = 'https://status.claude.com/api/v2/incidents/unresolved.json';
 
 // ── settings (persisted in <userData>/config.json) ──────────────────
-const KEY_CHOICES = ['F6', 'F7', 'F8', 'F9', 'F10', 'F12', 'ScrollLock', 'Pause'];
-const GNOME_KEYSYM = { ScrollLock: 'Scroll_Lock' }; // where X names differ
 const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
 
-const GLOW_STYLES = ['bottom', 'border', 'off'];
 const SOUND_THEMES = ['bells', 'pluck', 'wood', 'piano'];
 
 const settings = {
-  key: DEFAULT_KEY,
+  shortcut: keys.DEFAULT, // { code, keysym, label } — any key, recorded live
   autoReveal: true,      // peek on its own when the status changes
   sound: false,          // chime on change
   soundTheme: 'bells',   // which voice the chimes use
   autostart: false,      // launch at login
   displayId: null,       // null = primary display
-  glow: 'bottom',        // ambient light: bottom | border | off
-  usage: true,           // show Claude Code usage (from its local transcripts)
-  weeklyReset: null,     // { day: 0-6 Sun-Sat, hour: 0-23 } or null = rolling 7 days
+  weekReset: null,       // a real weekly reset moment, learned from Claude Code
   statuslineChain: null, // original statusline command the shim defers to
   statuslinePrev: null,  // original statusLine settings object, restored on disable
   limitsSetup: false,    // auto-setup ran (or the user chose) — don't re-decide for them
 };
-let holdKey = UiohookKey[DEFAULT_KEY];
+let holdKey = settings.shortcut.code;
 
 function loadConfig() {
   try {
     const c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-    if (typeof c.key === 'string' && UiohookKey[c.key] !== undefined) settings.key = c.key;
+    const sc = keys.fromConfig(c.shortcut !== undefined ? c.shortcut : c.key);
+    if (sc) settings.shortcut = sc;
     for (const k of ['autoReveal', 'sound', 'autostart', 'limitsSetup']) {
       if (typeof c[k] === 'boolean') settings[k] = c[k];
     }
     if (typeof c.displayId === 'number') settings.displayId = c.displayId;
-    if (GLOW_STYLES.includes(c.glow)) settings.glow = c.glow;
+    if (Number.isFinite(c.weekReset)) settings.weekReset = c.weekReset;
     if (SOUND_THEMES.includes(c.soundTheme)) settings.soundTheme = c.soundTheme;
-    if (typeof c.usage === 'boolean') settings.usage = c.usage;
-    if (
-      c.weeklyReset &&
-      Number.isInteger(c.weeklyReset.day) && c.weeklyReset.day >= 0 && c.weeklyReset.day <= 6 &&
-      Number.isInteger(c.weeklyReset.hour) && c.weeklyReset.hour >= 0 && c.weeklyReset.hour <= 23
-    ) {
-      settings.weeklyReset = { day: c.weeklyReset.day, hour: c.weeklyReset.hour };
-    }
     if (typeof c.statuslineChain === 'string') settings.statuslineChain = c.statuslineChain;
     if (c.statuslinePrev && typeof c.statuslinePrev === 'object') settings.statuslinePrev = c.statuslinePrev;
   } catch (_) {} // no config yet, or unreadable — stay on the defaults
-  holdKey = UiohookKey[settings.key];
+  holdKey = settings.shortcut.code;
 }
 
 function sendChime(kind) {
   if (win && !win.isDestroyed()) win.webContents.send('chime', kind, settings.soundTheme);
-}
-
-function sendGlow() {
-  if (win && !win.isDestroyed()) win.webContents.send('glow', settings.glow);
 }
 
 function saveConfig() {
@@ -99,12 +83,12 @@ function saveConfig() {
 
 // the desktop's own shortcut system: covers native Wayland apps where the
 // X11 key hook can't see keystrokes. GNOME via gsettings, KDE via kglobalaccel.
+// Always on — there's no version of this app that's better off without it.
 function shortcutProvider() {
   if (gnomeShortcut.isGnome()) {
     return {
       desktop: 'GNOME',
       mod: gnomeShortcut,
-      binding: () => GNOME_KEYSYM[settings.key] || settings.key,
       // touching the poke file costs ~10ms per key event, which is what
       // lets tap/hold detection stay snappy (vs ~0.5s app spawns)
       command: `bash -c 'touch "\${XDG_RUNTIME_DIR:-/tmp}/vibecheck-poke"'`,
@@ -114,7 +98,6 @@ function shortcutProvider() {
     return {
       desktop: 'KDE',
       mod: kdeShortcut,
-      binding: () => settings.key,
       // .desktop Exec fields hate quoting, so bake the resolved path in
       command: `touch ${POKE_FILE}`,
     };
@@ -122,26 +105,29 @@ function shortcutProvider() {
   return null;
 }
 
-function installSystemBinding() {
+// Keys we can't name in X terms (an unmapped board key) can't be handed to
+// the desktop — the in-process hook still has them, so drop the stale
+// binding rather than leave the old key wired up.
+async function syncSystemBinding() {
   const p = shortcutProvider();
-  if (!p) return Promise.resolve();
-  return p.mod.install({ binding: p.binding(), command: p.command });
-}
-
-async function setKey(name) {
-  if (UiohookKey[name] === undefined) return;
-  settings.key = name;
-  holdKey = UiohookKey[name];
-  saveConfig();
-  if (tray) tray.setToolTip(`vibecheck — ${settings.key}: Claude status`);
+  if (!p) return;
   try {
-    const p = shortcutProvider();
-    if (p && (await p.mod.isInstalled())) {
-      await installSystemBinding(); // rebind the system shortcut too
+    if (settings.shortcut.keysym) {
+      await p.mod.install({ binding: settings.shortcut.keysym, command: p.command });
+    } else if (await p.mod.isInstalled()) {
+      await p.mod.uninstall();
     }
   } catch (err) {
-    console.error('could not rebind system shortcut:', err);
+    console.error('system shortcut sync failed:', err);
   }
+}
+
+async function setShortcut(sc) {
+  settings.shortcut = sc;
+  holdKey = sc.code;
+  saveConfig();
+  if (tray) tray.setToolTip(`vibecheck — ${keys.name(sc)}: Claude status`);
+  await syncSystemBinding();
 }
 
 function applyAutostart() {
@@ -202,14 +188,6 @@ let burstTimer = null;
 let burstCount = 0;
 let holdStartedAt = 0;
 let suppressKeyup = false;
-
-// tokens read well at three digits max: 812 → 45k → 1.2M → 38M → 1.2B
-function fmtTokens(n) {
-  if (n >= 1e9) return (n >= 1e10 ? Math.round(n / 1e9) : parseFloat((n / 1e9).toFixed(1))) + 'B';
-  if (n >= 1e6) return (n >= 1e7 ? Math.round(n / 1e6) : parseFloat((n / 1e6).toFixed(1))) + 'M';
-  if (n >= 1000) return Math.round(n / 1000) + 'k';
-  return String(n);
-}
 
 // ── real limit % (opt-in Claude Code statusline shim) ───────────────
 // Claude Code hands every statusline script the account's true /usage
@@ -274,6 +252,7 @@ function limitsUninstall() {
   let claude;
   try { claude = readClaudeSettings(); }
   catch (_) { return { ok: false, error: '~/.claude/settings.json is not valid JSON — fix it first' }; }
+  learnWeekReset(); // last chance before the numbers go: keep the real week
   try {
     if (isShimCommand(claude.statusLine)) {
       if (settings.statuslinePrev) claude.statusLine = settings.statuslinePrev;
@@ -312,11 +291,17 @@ function autoSetupLimits() {
   }
 }
 
+function readLimitsFile() {
+  try {
+    return JSON.parse(fs.readFileSync(LIMITS_PATH, 'utf8'));
+  } catch (_) { return null; } // absent or malformed — pill falls back to token counts
+}
+
 function readLimits() {
   try {
-    const raw = JSON.parse(fs.readFileSync(LIMITS_PATH, 'utf8'));
+    const raw = readLimitsFile();
     const now = Date.now();
-    if (!raw.updated_at || now - raw.updated_at > LIMITS_STALE_MS) return null;
+    if (!raw || !raw.updated_at || now - raw.updated_at > LIMITS_STALE_MS) return null;
     const pick = (w) => {
       if (!w || typeof w.used_percentage !== 'number') return null;
       const resetAt = typeof w.resets_at === 'number' ? w.resets_at * 1000 : null;
@@ -341,26 +326,44 @@ function watchLimits() {
   } catch (_) {} // no watcher = the 60s poll still picks changes up
 }
 
-let lastUsageSent = '';
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+// The account's weekly reset moment isn't in the transcripts — Claude Code
+// only tells the shim. Once heard it's kept for good and stepped forward a
+// week at a time, so the token counts stay on the real week even after Real
+// limit % is switched off (or the shim goes quiet).
+function weekWindow() {
+  if (!Number.isFinite(settings.weekReset)) return null;
+  const now = Date.now();
+  let resetAt = settings.weekReset;
+  while (resetAt <= now) resetAt += WEEK_MS;
+  return { since: resetAt - WEEK_MS, resetAt };
+}
+
+// straight from the file, not readLimits(): a reset moment that has already
+// passed is still a valid anchor (weekWindow walks it forward), and it's
+// worth keeping even once the percentages themselves have gone stale
+function learnWeekReset() {
+  const raw = readLimitsFile();
+  const secs = raw && raw.seven_day && raw.seven_day.resets_at;
+  if (typeof secs !== 'number') return;
+  const at = secs * 1000;
+  // same moment in the weekly cadence = nothing new to learn
+  if (Number.isFinite(settings.weekReset) && (at - settings.weekReset) % WEEK_MS === 0) return;
+  settings.weekReset = at;
+  saveConfig();
+}
 
 function sendUsage() {
-  const local = settings.usage ? usage.summary(settings.weeklyReset) : null;
-  const limits = settings.usage ? readLimits() : null;
+  learnWeekReset();
+  const limits = readLimits();
+  const local = usage.summary(weekWindow());
   const data =
     local || limits ? { ...(local || { session: null, week: null }), limits } : null;
   if (win && !win.isDestroyed()) win.webContents.send('usage', data);
-  const key = JSON.stringify(data);
-  if (key !== lastUsageSent) {
-    lastUsageSent = key;
-    if (tray) buildTrayMenu(); // usage lines live in the tray menu too
-  }
 }
 
 function refreshUsage() {
-  if (!settings.usage) {
-    sendUsage();
-    return;
-  }
   usage.refresh().then(sendUsage);
 }
 
@@ -430,6 +433,12 @@ let pendingHideTimer = null;
 
 function pokeFast() {
   if (holding) return; // the in-process key hook already owns this press
+  // a poke while recording means the desktop grabbed the key before either
+  // channel could see it — which only the current shortcut does
+  if (capture) {
+    noteCapture(settings.shortcut);
+    return;
+  }
   const now = Date.now();
   const gap = now - lastPokeAt;
   lastPokeAt = now;
@@ -493,6 +502,10 @@ function startPokeFile() {
 // windows have to be generous. A lone poke = tap; a burst = held key.
 function pokeSlow() {
   if (holding) return;
+  if (capture) {
+    noteCapture(settings.shortcut);
+    return;
+  }
   if (burstTimer) {
     clearTimeout(burstTimer);
     burstCount++;
@@ -604,7 +617,6 @@ function createWindow() {
   win.loadFile('index.html');
   win.webContents.on('did-finish-load', () => {
     if (lastData) win.webContents.send('status', lastData);
-    sendGlow();
     refreshUsage(); // waits out any in-flight scan — never paints partial numbers
   });
 }
@@ -612,55 +624,17 @@ function createWindow() {
 function createTray() {
   const icon = nativeImage.createFromBuffer(Buffer.from(TRAY_PNG, 'base64'));
   tray = new Tray(icon.resize({ width: 16, height: 16 }));
-  tray.setToolTip(`vibecheck — ${settings.key}: Claude status`);
+  tray.setToolTip(`vibecheck — ${keys.name(settings.shortcut)}: Claude status`);
   buildTrayMenu();
 }
 
+// deliberately short: the numbers live in the pill, and showing it already
+// refreshes them
 function buildTrayMenu() {
   const template = [
     { label: 'Show/hide status', click: () => toggle() },
-    { label: 'Refresh now', click: () => { fetchStatus(); refreshUsage(); } },
     { label: 'Settings…', click: () => openSettings() },
   ];
-  const u = settings.usage ? usage.summary(settings.weeklyReset) : null;
-  const lim = settings.usage ? readLimits() : null;
-  if (u || lim) {
-    const time = (ts) =>
-      new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const dayTime = (ts) =>
-      new Date(ts).toLocaleDateString([], { weekday: 'short' }) + ' ' + time(ts);
-    // real % (from the statusline shim) leads; local token counts follow
-    const sess = [];
-    if (lim && lim.session) sess.push(`${lim.session.pct}%`);
-    if (u && u.session) sess.push(`${fmtTokens(u.session.tokens)} tokens`);
-    const sessReset =
-      (lim && lim.session && lim.session.resetAt) || (u && u.session && u.session.resetAt);
-    const wk = [];
-    if (lim && lim.week) wk.push(`${lim.week.pct}%`);
-    if (u) wk.push(`${fmtTokens(u.week.tokens)} tokens`);
-    const wkReset = (lim && lim.week && lim.week.resetAt) || (u && u.week.resetAt);
-    template.push(
-      { type: 'separator' },
-      {
-        label: sess.length
-          ? `Session · ${sess.join(' · ')}` + (sessReset ? ` · resets ${time(sessReset)}` : '')
-          : 'Session · idle',
-        enabled: false,
-      }
-    );
-    if (wk.length) {
-      template.push({
-        label:
-          `Week · ${wk.join(' · ')}` +
-          (wkReset
-            ? ` · resets ${dayTime(wkReset)}`
-            : lim && lim.week
-              ? ''
-              : ' · rolling 7 days'),
-        enabled: false,
-      });
-    }
-  }
   if (updateAvailable) {
     template.push({ type: 'separator' });
     template.push({
@@ -702,7 +676,7 @@ function openSettings() {
   }
   settingsWin = new BrowserWindow({
     width: 430,
-    height: 880,
+    height: 560, // the page measures itself and corrects this on load
     frame: false,
     transparent: true,
     resizable: false,
@@ -713,23 +687,18 @@ function openSettings() {
     },
   });
   settingsWin.loadFile('settings.html');
-  settingsWin.on('closed', () => (settingsWin = null));
+  settingsWin.on('closed', () => {
+    settingsWin = null;
+    endCapture('cancel'); // closing mid-recording gives the key back
+  });
 }
 
-ipcMain.handle('settings:get', async () => {
-  const p = shortcutProvider();
-  return {
-  settings,
-  keyChoices: KEY_CHOICES,
+ipcMain.handle('settings:get', async () => ({
+  settings: { ...settings, shortcut: { ...settings.shortcut, label: keys.name(settings.shortcut) } },
   platform: process.platform,
   claude: {
     found: fs.existsSync(path.dirname(CLAUDE_SETTINGS)),
     limitsInstalled: limitsInstalled(),
-  },
-  systemBind: {
-    available: !!p,
-    desktop: p ? p.desktop : null,
-    installed: p ? await p.mod.isInstalled() : false,
   },
   displays: screen.getAllDisplays().map((d) => ({
     id: d.id,
@@ -737,12 +706,10 @@ ipcMain.handle('settings:get', async () => {
       `${d.label || 'Display'} — ${d.size.width}×${d.size.height}` +
       (d.id === screen.getPrimaryDisplay().id ? ' (primary)' : ''),
   })),
-  };
-});
+}));
 
 ipcMain.handle('settings:set', async (_e, patch) => {
   if (typeof patch !== 'object' || !patch) return false;
-  if ('key' in patch) await setKey(String(patch.key));
   if ('autoReveal' in patch) settings.autoReveal = !!patch.autoReveal;
   if ('sound' in patch) settings.sound = !!patch.sound;
   if ('autostart' in patch) {
@@ -753,49 +720,95 @@ ipcMain.handle('settings:set', async (_e, patch) => {
     settings.displayId = typeof patch.displayId === 'number' ? patch.displayId : null;
     positionWindow();
   }
-  if ('glow' in patch && GLOW_STYLES.includes(patch.glow)) {
-    settings.glow = patch.glow;
-    sendGlow();
-  }
   if ('soundTheme' in patch && SOUND_THEMES.includes(patch.soundTheme)) {
     settings.soundTheme = patch.soundTheme;
     sendChime('open'); // instant preview
-  }
-  if ('usage' in patch) {
-    settings.usage = !!patch.usage;
-    refreshUsage();
-  }
-  if ('weeklyReset' in patch) {
-    const w = patch.weeklyReset;
-    settings.weeklyReset =
-      w &&
-      Number.isInteger(w.day) && w.day >= 0 && w.day <= 6 &&
-      Number.isInteger(w.hour) && w.hour >= 0 && w.hour <= 23
-        ? { day: w.day, hour: w.hour }
-        : null;
-    refreshUsage();
-  }
-  if ('systemBind' in patch) {
-    try {
-      const p = shortcutProvider();
-      if (p) {
-        if (patch.systemBind) await installSystemBinding();
-        else await p.mod.uninstall();
-      }
-    } catch (err) {
-      console.error('system shortcut change failed:', err);
-    }
   }
   saveConfig();
   return true;
 });
 
+// ── recording a shortcut ────────────────────────────────────────────
+// Two channels see a keypress and either can be the only one: the global
+// hook knows the keycode the pill will match on, the settings window sees
+// the key even where the hook is blind, and on a desktop that already grabs
+// the current key neither fires — a poke arrives instead. Whichever speaks
+// first wins the race, then we wait a beat for the other to fill in the rest.
+let capture = null;
+
+const CAPTURE_MS = 10_000;
+
+function beginCapture() {
+  endCapture('cancel'); // a second click just restarts the recording
+  return new Promise((resolve) => {
+    capture = { resolve, hit: null, timer: null };
+    capture.timer = setTimeout(() => endCapture('timeout'), CAPTURE_MS);
+  });
+}
+
+function noteCapture(hit) {
+  if (!capture || !hit) return;
+  const prev = capture.hit;
+  // a second, different keycode is a second key press — the first one wins
+  if (prev && prev.code && hit.code && prev.code !== hit.code) return;
+  capture.hit = keys.merge(prev, hit);
+  clearTimeout(capture.timer);
+  // with a keycode in hand there's little left to wait for; without one,
+  // give the slower channel room to supply it
+  capture.timer = setTimeout(() => endCapture('done'), capture.hit.code ? 140 : 400);
+}
+
+function endCapture(reason) {
+  if (!capture) return;
+  const { resolve, timer, hit } = capture;
+  clearTimeout(timer);
+  capture = null;
+  resolve({ hit, reason });
+}
+
+ipcMain.handle('key:capture', async () => {
+  const { hit, reason } = await beginCapture();
+  const current = { label: keys.name(settings.shortcut), note: null };
+  if (!hit) {
+    // nothing arrived on either channel: something upstream ate the key
+    return reason === 'timeout'
+      ? { ...current, note: 'no key came through — your desktop may own it already' }
+      : current;
+  }
+  if (!hit.code) {
+    return { ...current, note: `“${keys.name(hit)}” never reaches vibecheck — try another key` };
+  }
+  if (hit.code === settings.shortcut.code) return current;
+  await setShortcut(hit);
+  return {
+    label: keys.name(hit),
+    note:
+      hit.keysym || !shortcutProvider()
+        ? null
+        : 'set — but your desktop can’t bind this one for other apps',
+  };
+});
+
+ipcMain.on('key:capture:dom', (_e, dom) => {
+  if (!capture || !dom) return;
+  noteCapture(keys.fromDom(String(dom.code || ''), String(dom.key || '')));
+});
+
+ipcMain.on('key:capture:cancel', () => endCapture('cancel'));
+
 ipcMain.handle('limits:set', (_e, on) => {
   const r = on ? limitsInstall() : limitsUninstall();
   settings.limitsSetup = true; // an explicit choice — auto-setup stands down
   saveConfig();
-  sendUsage(); // reflect the change in pill + tray right away
+  sendUsage(); // reflect the change in the pill right away
   return { ...r, installed: limitsInstalled() };
+});
+
+// the page knows its own height; the panel's 30px glow margin is ours
+ipcMain.on('settings:fit', (_e, height) => {
+  if (!settingsWin || settingsWin.isDestroyed()) return;
+  const h = Math.round(Number(height) || 0);
+  if (h > 0) settingsWin.setContentSize(430, Math.min(900, h + 60));
 });
 
 ipcMain.on('settings:close', () => {
@@ -817,6 +830,10 @@ function calibrateRapidWindow() {
 
 function startHook() {
   uIOhook.on('keydown', (e) => {
+    if (capture) {
+      noteCapture(keys.fromCode(e.keycode));
+      return; // recording a new shortcut — nothing peeks meanwhile
+    }
     if (e.keycode !== holdKey || holding) return; // ignore OS key-repeat
     holding = true;
     if (visible) {
@@ -848,13 +865,19 @@ function startHook() {
   }
 }
 
+// GNOME hides tray icons unless an extension puts them back, so settings
+// need a door that doesn't go through the tray: `vibecheck --settings`
+const wantsSettings = (argv) => argv.includes('--settings');
+
 // Launching a second instance just pokes the running one to peek — this is
 // the Wayland-friendly path: bind a system shortcut to the same command.
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   loadConfig();
-  app.on('second-instance', () => pokeSlow());
+  app.on('second-instance', (_e, argv) =>
+    wantsSettings(argv) ? openSettings() : pokeSlow()
+  );
 
   app.whenReady().then(() => {
     if (process.platform === 'darwin' && app.dock) app.dock.hide();
@@ -865,6 +888,7 @@ if (!app.requestSingleInstanceLock()) {
     calibrateRapidWindow();
     applyAutostart();
     ensureDesktopIntegration();
+    syncSystemBinding(); // the desktop-level binding is part of the deal
     for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) {
       screen.on(ev, positionWindow);
     }
@@ -876,6 +900,7 @@ if (!app.requestSingleInstanceLock()) {
     watchLimits();
     setTimeout(checkForUpdate, 15_000);
     setInterval(checkForUpdate, 24 * 60 * 60 * 1000);
+    if (wantsSettings(process.argv)) openSettings();
   });
 }
 
