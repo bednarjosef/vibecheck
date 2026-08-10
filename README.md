@@ -7,7 +7,7 @@
 limits, the real percentages, and how long until each one resets — plus
 whether Claude itself is up. Let go and it melts away.
 
-![vibecheck demo](https://raw.githubusercontent.com/bednarjosef/vibecheck/main/docs/hero.gif)
+![vibecheck demo](https://raw.githubusercontent.com/bednarjosef/vibecheck/main/docs/hero.webp)
 
 Tap the key to pin it, hold it to peek. It floats over whatever you're
 doing, ignores your clicks, and leaves nothing behind.
