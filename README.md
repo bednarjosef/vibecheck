@@ -41,10 +41,19 @@ vibecheck
 ```
 
 The same command updates it later, and vibecheck puts a line in its tray menu
-when a new version is out.
+when a new version is out. You can run it with vibecheck open: npm swaps the
+files underneath the running app, which keeps going on the old ones until you
+restart it, so the tray menu turns into **Restart to finish** once the new
+version is on disk. Click that and you're on it.
 
 > It's an Electron app, so npm pulls a private Chromium with it: **~270 MB
-> on disk**. vibecheck itself is 400 kB of that.
+> on disk**. vibecheck itself is 400 kB of that. Most updates only replace
+> that 400 kB; one that moves to a new Electron fetches the whole thing again.
+
+**If you upgrade Node itself**, install vibecheck again for the new version.
+A global npm package belongs to the Node it was installed under, and the
+launcher entry, the login item and (on macOS) the Accessibility permission
+all point at that copy's path.
 
 **Prefer an installer?** They're all on the
 [latest release](https://github.com/bednarjosef/vibecheck/releases/latest):
@@ -110,6 +119,9 @@ take it back out and restore whatever status line you had before it, run
 
 - **macOS**: the global key hook needs Accessibility permission, under System
   Settings → Privacy & Security → Accessibility. The app hides from the Dock.
+  The permission is granted to a binary at a path, so installing under a new
+  Node means granting it again; when the hook can't start, the tray menu says
+  so and opens the right settings pane.
 - **Windows**: works out of the box.
 - **Linux**: needs a compositor for transparency, which GNOME and KDE both
   have. On Wayland the key hook only sees X11/XWayland windows, which is why

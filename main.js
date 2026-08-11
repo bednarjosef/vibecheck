@@ -1,5 +1,5 @@
 // vibecheck — hold a key, see Claude's status. Let go, it melts away.
-const { app, BrowserWindow, Tray, Menu, nativeImage, screen, ipcMain, shell, net } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, screen, ipcMain, shell, net, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -905,11 +905,51 @@ function buildTrayMenu() {
     { label: 'Show/hide status', click: () => toggle() },
     { label: 'Settings…', click: () => openSettings() }
   );
-  if (updateAvailable) {
+  // An update that's already unpacked outranks one that hasn't: the second
+  // is answered by the first.
+  if (restartPending) {
     template.push({ type: 'separator' });
     template.push({
-      label: `Update available — v${updateAvailable}`,
-      click: () => shell.openExternal('https://github.com/bednarjosef/vibecheck/releases'),
+      label: `Restart to finish v${restartPending}`,
+      click: () => {
+        app.relaunch();
+        app.quit();
+      },
+    });
+  } else if (updateAvailable) {
+    template.push({ type: 'separator' });
+    // Where the update comes from is where the user has to go for it. An
+    // npm install sent to the releases page ends up as a second copy beside
+    // the first, sharing one config and one lock, which is a worse state
+    // than being a version behind.
+    template.push(
+      app.isPackaged
+        ? {
+            label: `Update available — v${updateAvailable}`,
+            click: () => shell.openExternal('https://github.com/bednarjosef/vibecheck/releases'),
+          }
+        : {
+            label: `Update available — copy the command`,
+            click: () => {
+              clipboard.writeText('npm install -g vibecheck-app');
+              if (win && !win.isDestroyed() && winLoaded) {
+                win.webContents.send('notice', { text: 'command copied', bare: true });
+                autoPeek(4_000);
+              }
+            },
+          }
+    );
+  }
+  // The tooltip says this too, but a tooltip can't take you there, and on
+  // macOS a hook that never started means the key does nothing at all.
+  if (hookFailed && process.platform === 'darwin') {
+    template.push({ type: 'separator' });
+    template.push({
+      label: 'Key needs Accessibility permission…',
+      click: () =>
+        shell.openExternal(
+          'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
+        ),
     });
   }
   template.push({ type: 'separator' }, { label: 'Quit', click: () => app.quit() });
@@ -919,18 +959,66 @@ function buildTrayMenu() {
 // npm can't auto-update a global package, but we can at least notice
 let updateAvailable = null;
 
+// Only the numeric core is compared. A tag like 1.6.0-beta.1 splits into
+// "0-beta", which Number turns into NaN, which read as zero and made a
+// prerelease look older than the release it came before.
+const newer = (a, b) => {
+  const parts = (v) => String(v).split('-')[0].split('.').map((n) => parseInt(n, 10) || 0);
+  const pa = parts(a);
+  const pb = parts(b);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+  }
+  return false;
+};
+
+// ── the update that already happened ────────────────────────────────
+// npm replaces the package directory underneath a running app, and the
+// single-instance lock turns the "did that work?" launch into a poke at the
+// process that's already there. So updating in place looks exactly like
+// updating properly, and leaves you on the old code with no way to tell.
+// The version on disk is the one that answers it.
+const RUNNING_VERSION = app.getVersion();
+let restartPending = null;
+
+function versionOnDisk() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(app.getAppPath(), 'package.json'), 'utf8')).version;
+  } catch (_) {
+    return null;
+  }
+}
+
+let lastReplacedCheck = 0;
+
+function checkReplaced() {
+  // packaged installers swap the whole app out and restart it themselves
+  if (restartPending || app.isPackaged) return;
+  // a held key pokes us many times a second; the answer can't change that fast
+  if (Date.now() - lastReplacedCheck < 3_000) return;
+  lastReplacedCheck = Date.now();
+  const disk = versionOnDisk();
+  if (!disk || disk === RUNNING_VERSION) return;
+  restartPending = disk;
+  updateAvailable = null; // the update is done; that nudge is answered
+  buildTrayMenu();
+  announceRestart(disk);
+}
+
+// Same shape as the new-version notice, because it is the other half of it.
+function announceRestart(version) {
+  if (!settings.autoReveal || !winLoaded) return;
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('notice', { text: `v${version} installed — restart`, bare: true });
+  }
+  chimeArrival();
+  autoPeek(6_000);
+}
+
 async function checkForUpdate() {
   try {
     const res = await fetch('https://registry.npmjs.org/vibecheck-app/latest');
     const { version } = await res.json();
-    const newer = (a, b) => {
-      const pa = a.split('.').map(Number);
-      const pb = b.split('.').map(Number);
-      for (let i = 0; i < 3; i++) {
-        if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
-      }
-      return false;
-    };
     if (version && newer(version, app.getVersion()) && version !== updateAvailable) {
       updateAvailable = version;
       buildTrayMenu();
@@ -1187,9 +1275,12 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   loadConfig();
-  app.on('second-instance', (_e, argv) =>
-    wantsSettings(argv) ? openSettings() : pokeSlow()
-  );
+  app.on('second-instance', (_e, argv) => {
+    // typing `vibecheck` right after `npm i -g` is exactly when someone is
+    // asking whether the update took, so it's the moment worth answering
+    checkReplaced();
+    return wantsSettings(argv) ? openSettings() : pokeSlow();
+  });
 
   app.whenReady().then(() => {
     if (process.platform === 'darwin' && app.dock) app.dock.hide();
@@ -1212,6 +1303,7 @@ if (!app.requestSingleInstanceLock()) {
     watchLimits();
     setTimeout(checkForUpdate, 15_000);
     setInterval(checkForUpdate, 24 * 60 * 60 * 1000);
+    setInterval(checkReplaced, POLL_MS);
     if (wantsSettings(process.argv)) openSettings();
   });
 }
