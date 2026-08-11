@@ -154,6 +154,30 @@
   input[type="checkbox"]:checked { background: rgba(62, 207, 142, 0.35); }
   input[type="checkbox"]:checked::after { transform: translateX(16px); background: var(--ok); }
 
+  /* Set like the header it answers to, at the other end of the panel. The
+     number itself is selectable, because the one time anybody reads it is to
+     put it in a bug report. */
+  footer {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 10px;
+    padding: 10px 18px 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    color: var(--faint);
+  }
+
+  footer #ver { user-select: text; cursor: text; }
+
+  /* the version is only half the answer if a newer one is already sitting
+     on disk waiting for a restart. The dot only earns its place when there
+     is something on the other side of it. */
+  footer #note { letter-spacing: 0.06em; }
+  footer #note:not(:empty)::before { content: '·'; margin-right: 10px; }
+  footer #note.ready { color: var(--ok); }
+
 </style>
 </head>
 <body>
@@ -204,6 +228,10 @@
         <select id="display"></select>
       </div>
     </main>
+    <footer>
+      <span id="ver"></span>
+      <span id="note"></span>
+    </footer>
   </div>
 
 <script>
@@ -230,8 +258,17 @@
     $('accountUsage').checked = s.settings.accountUsage;
     $('soundTheme').value = s.settings.soundTheme;
     $('position').value = s.settings.position;
+
+    $('ver').textContent = 'v' + s.version;
+    if (s.update && s.update.restart) {
+      $('note').textContent = 'v' + s.update.restart + ' ready — restart';
+      $('note').classList.add('ready');
+    } else if (s.update && s.update.available) {
+      $('note').textContent = 'v' + s.update.available + ' available';
+    }
+
     syncSoundTheme();
-    fitWindow();
+    trackHeight();
   }
 
   // picking a theme plays a preview, which is a strange thing to offer
@@ -240,10 +277,23 @@
     $('soundTheme').disabled = !$('sound').checked;
   }
 
-  // the window is only ever as tall as the settings it holds
-  function fitWindow() {
+  // The window is only ever as tall as the settings it holds, and the panel
+  // clips rather than scrolls, so a measurement that lands early is a band
+  // cropped off the bottom.
+  //
+  // Watched rather than measured once, because the height moves after the
+  // first paint: the bundled face is wider than the fallback, so once it
+  // arrives the two-line sub-labels rewrap and main grows about 30px. Font
+  // loading signals its own completion a beat before that reflow, so timing
+  // the read is a race; the box itself is the thing worth listening to.
+  // Recording a key rewrites a sub-label, and it covers that for free.
+  function trackHeight() {
     const panel = document.querySelector('#panel');
-    window.vc.fit(panel.querySelector('header').offsetHeight + panel.querySelector('main').offsetHeight);
+    const bands = ['header', 'main', 'footer'].map((s) => panel.querySelector(s));
+    const send = () => window.vc.fit(bands.reduce((h, b) => h + b.offsetHeight, 0));
+    const ro = new ResizeObserver(send);
+    for (const b of bands) ro.observe(b);
+    send(); // once now, so the window is close before the face lands
   }
 
   // Record whatever key comes next — the main process listens on the global
@@ -264,7 +314,6 @@
     $('key').classList.remove('listening');
     $('key').textContent = r.label;
     $('key-sub').textContent = r.note || keySub;
-    fitWindow();
   }
 
   document.addEventListener('keydown', (e) => {

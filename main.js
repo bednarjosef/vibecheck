@@ -1070,6 +1070,10 @@ function openSettings() {
 ipcMain.handle('settings:get', async () => ({
   settings: { ...settings, shortcut: { ...settings.shortcut, label: keys.name(settings.shortcut) } },
   platform: process.platform,
+  // the version that's actually running, which after an in-place npm update
+  // is not the one on disk — see checkReplaced
+  version: RUNNING_VERSION,
+  update: restartPending ? { restart: restartPending } : updateAvailable ? { available: updateAvailable } : null,
   displays: screen.getAllDisplays().map((d) => ({
     id: d.id,
     label:
