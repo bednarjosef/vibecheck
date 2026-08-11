@@ -55,9 +55,14 @@ Four more things, which have each cost a wrong conclusion:
 - **Don't assert on live token totals.** `usage.js` reads
   `~/.claude/projects/**`, which every running Claude Code session appends to.
   Inject a `limits.json` and assert on that.
-- **Don't toggle "Real limit %" in a test.** It rewrites
-  `~/.claude/settings.json`, which is machine-wide, and will clobber the
-  user's real status line.
+- **Every launch installs the status-line shim.** There's no setting for it
+  any more: startup writes `statusLine` in `~/.claude/settings.json`, which is
+  machine-wide, pointing at the *launching profile's* copy of the shim. On a
+  machine where it's already installed a test instance only refreshes its own
+  throwaway copy and leaves the file alone — but a test that starts from a
+  clean `~/.claude` will aim the real setting at a temp path. Check
+  `statusLine` before and after, and `vibecheck --restore-statusline` puts the
+  previous one back.
 - **Record events, don't sample state.** An auto-peek lasts a few seconds, so
   checking whether the pill is visible some time later proves nothing either
   way. Listen for `reveal` and keep timestamps.

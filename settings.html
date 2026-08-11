@@ -186,10 +186,6 @@
         </select>
       </div>
       <div class="row">
-        <div><div class="lbl">Real limit %</div><div class="sub" id="limits-sub">/usage percentages via a status-line shim</div></div>
-        <input type="checkbox" id="limitsSync" />
-      </div>
-      <div class="row">
         <div><div class="lbl">Start at login</div></div>
         <input type="checkbox" id="autostart" />
       </div>
@@ -230,12 +226,6 @@
     $('autostart').checked = s.settings.autostart;
     $('soundTheme').value = s.settings.soundTheme;
     $('position').value = s.settings.position;
-
-    $('limitsSync').checked = s.claude.limitsInstalled;
-    if (!s.claude.found) {
-      $('limitsSync').disabled = true;
-      $('limits-sub').textContent = 'Claude Code was not found on this machine';
-    }
     fitWindow();
   }
 
@@ -282,16 +272,6 @@
   for (const id of ['autoReveal', 'sound', 'autostart']) {
     $(id).addEventListener('change', (e) => window.vc.set({ [id]: e.target.checked }));
   }
-  $('limitsSync').addEventListener('change', async (e) => {
-    const r = await window.vc.setLimits(e.target.checked);
-    e.target.checked = r.installed;
-    $('limits-sub').textContent = r.ok
-      ? r.installed
-        ? 'installed — updates with your next Claude Code reply'
-        : 'off — your previous status line is restored'
-      : r.error;
-    fitWindow();
-  });
   $('close').addEventListener('click', () => window.vc.close());
 
   init();

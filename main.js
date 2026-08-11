@@ -53,8 +53,7 @@ const settings = {
   position: 'top',       // which edge the pill drops in from: top | bottom
   weekReset: null,       // a real weekly reset moment, learned from Claude Code
   statuslinePrev: null,  // the status line we displaced: the shim defers to
-                         // its command, and disabling puts the object back
-  limitsSetup: false,    // auto-setup ran (or the user chose) — don't re-decide for them
+                         // its command, and restoring puts the object back
 };
 let holdKey = settings.shortcut.code;
 let firstRun = false; // no config on disk: nobody has ever seen this app
@@ -64,7 +63,7 @@ function loadConfig() {
     const c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
     const sc = keys.fromConfig(c.shortcut !== undefined ? c.shortcut : c.key);
     if (sc) settings.shortcut = sc;
-    for (const k of ['autoReveal', 'sound', 'autostart', 'limitsSetup']) {
+    for (const k of ['autoReveal', 'sound', 'autostart']) {
       if (typeof c[k] === 'boolean') settings[k] = c[k];
     }
     if (typeof c.displayId === 'number') settings.displayId = c.displayId;
@@ -299,26 +298,20 @@ function limitsUninstall() {
   return { ok: true };
 }
 
-// default-on: first launch with Claude Code present wires the shim up by
-// itself. Runs once — after that (or after any manual toggle) the choice
-// is the user's and stays untouched. Failures stay quiet and retry next
-// launch. When already installed, just keep the deployed shim current.
+// The real percentages are the whole point, so this isn't a setting: every
+// launch that finds Claude Code makes sure the shim is in place, and keeps
+// the deployed copy current when it already is. Failures stay quiet and get
+// another go next launch — a status line that didn't install is a number
+// counted from transcripts instead, not a broken app.
+//
+// The way back out is `vibecheck --restore-statusline`, below.
 function autoSetupLimits() {
   if (!fs.existsSync(path.dirname(CLAUDE_SETTINGS))) return; // no Claude Code here
   if (limitsInstalled()) {
     try { fs.copyFileSync(SHIM_SRC, SHIM_DEST); } catch (_) {}
-    if (!settings.limitsSetup) {
-      settings.limitsSetup = true;
-      saveConfig();
-    }
     return;
   }
-  if (settings.limitsSetup) return;
-  if (limitsInstall().ok) {
-    settings.limitsSetup = true;
-    saveConfig();
-    sendUsage();
-  }
+  if (limitsInstall().ok) sendUsage();
 }
 
 function readLimitsFile() {
@@ -870,10 +863,6 @@ function openSettings() {
 ipcMain.handle('settings:get', async () => ({
   settings: { ...settings, shortcut: { ...settings.shortcut, label: keys.name(settings.shortcut) } },
   platform: process.platform,
-  claude: {
-    found: fs.existsSync(path.dirname(CLAUDE_SETTINGS)),
-    limitsInstalled: limitsInstalled(),
-  },
   displays: screen.getAllDisplays().map((d) => ({
     id: d.id,
     label:
@@ -976,14 +965,6 @@ ipcMain.on('key:capture:dom', (_e, dom) => {
 
 ipcMain.on('key:capture:cancel', () => endCapture('cancel'));
 
-ipcMain.handle('limits:set', (_e, on) => {
-  const r = on ? limitsInstall() : limitsUninstall();
-  settings.limitsSetup = true; // an explicit choice — auto-setup stands down
-  saveConfig();
-  sendUsage(); // reflect the change in the pill right away
-  return { ...r, installed: limitsInstalled() };
-});
-
 // the page knows its own height; the panel's 30px glow margin is ours
 ipcMain.on('settings:fit', (_e, height) => {
   if (!settingsWin || settingsWin.isDestroyed()) return;
@@ -1050,6 +1031,24 @@ function startHook() {
 // GNOME hides tray icons unless an extension puts them back, so settings
 // need a door that doesn't go through the tray: `vibecheck --settings`
 const wantsSettings = (argv) => argv.includes('--settings');
+
+// The undo for the one Claude Code setting this app writes. It runs before
+// the single-instance lock, so it does the work itself instead of poking a
+// running copy — and it says so rather than exiting silently, because it's
+// the answer to "what did you do to my settings.json". A vibecheck that is
+// still installed will put the shim back on its next launch: this is for
+// after you quit it, or for good.
+if (process.argv.includes('--restore-statusline')) {
+  loadConfig();
+  const was = limitsInstalled();
+  const r = limitsUninstall();
+  console.log(
+    !r.ok ? 'vibecheck: ' + r.error
+      : was ? 'vibecheck: your previous Claude Code status line is back'
+      : 'vibecheck: nothing to undo — your status line was never vibecheck\'s'
+  );
+  app.exit(r.ok ? 0 : 1);
+}
 
 // Launching a second instance just pokes the running one to peek — this is
 // the Wayland-friendly path: bind a system shortcut to the same command.

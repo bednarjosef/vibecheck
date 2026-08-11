@@ -11,7 +11,10 @@ const { spawn } = require('child_process');
 const electron = require('electron'); // path to the binary when required from node
 
 const argv = process.argv.slice(2);
-const foreground = argv.includes('--foreground') || argv.includes('--fg');
+// --restore-statusline has something to say and then exits, so it stays
+// attached whether you asked for that or not
+const foreground =
+  argv.includes('--foreground') || argv.includes('--fg') || argv.includes('--restore-statusline');
 const passthrough = argv.filter((a) => a !== '--foreground' && a !== '--fg');
 
 const args = [
