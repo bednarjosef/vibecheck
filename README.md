@@ -33,15 +33,7 @@ there's a newer vibecheck.
 
 ## Install
 
-**Download an installer** — [latest release](https://github.com/bednarjosef/vibecheck/releases/latest):
-
-| | |
-|---|---|
-| **macOS** | `-arm64.dmg` for Apple Silicon · `-x64.dmg` for Intel |
-| **Windows** | `-Setup-x64.exe` · `-Setup-arm64.exe` |
-| **Linux** | `-x86_64.AppImage` or `_amd64.deb` · `-arm64` of either |
-
-**Or one command**, if you'd rather have npm keep it current:
+**Any OS, one command** — and npm keeps it current:
 
 ```bash
 npm install -g vibecheck-app
@@ -50,6 +42,15 @@ vibecheck
 
 > It's an Electron app, so npm pulls a private Chromium with it: **~270 MB
 > on disk**. vibecheck itself is 400 kB of that.
+
+**Or download an installer**, if you'd rather leave Node out of it —
+[latest release](https://github.com/bednarjosef/vibecheck/releases/latest):
+
+| | |
+|---|---|
+| **macOS** | `-arm64.dmg` for Apple Silicon · `-x64.dmg` for Intel |
+| **Windows** | `-Setup-x64.exe` · `-Setup-arm64.exe` |
+| **Linux** | `-x86_64.AppImage` or `_amd64.deb` · `-arm64` of either |
 
 Either way it registers itself as a real app — launcher entry on Linux, an
 app bundle on macOS, a Start Menu shortcut on Windows. It starts in the tray
