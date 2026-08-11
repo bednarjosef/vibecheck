@@ -1,6 +1,6 @@
 {
   "name": "vibecheck-app",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "description": "See how much Claude you have left — session and weekly usage, real percentages, and Claude's live status, on one key.",
   "main": "main.js",
   "scripts": {
