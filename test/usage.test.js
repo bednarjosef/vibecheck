@@ -141,6 +141,32 @@ test('a block that has already lapsed leaves no session at all', async () => {
   assert.equal(sum.week.tokens, 90); // still this week's work
 });
 
+test('a window Claude Code reported as closed floors the replay', async () => {
+  const s = sandbox();
+  const closed = Date.now() - 2 * HOUR; // the reported window ended here
+  const opened = closed + 20 * MIN; // first message of the one that replaced it
+  s.write('a.jsonl', [
+    line({ at: closed - 30 * MIN, id: 'theirs', out: 900 }), // the closed window's work
+    line({ at: opened, id: 'ours', out: 40 }),
+  ]);
+  await s.usage.refresh();
+  const sum = s.usage.summary(null, { after: closed });
+  // left to itself the replay would keep the earlier block open for another
+  // three hours and hand it all 940
+  assert.equal(sum.session.tokens, 40);
+  assert.equal(sum.session.resetAt, bucket(opened) + 5 * HOUR);
+});
+
+test('nothing since a window closed is no session, not a session of nothing', async () => {
+  const s = sandbox();
+  const closed = Date.now() - HOUR;
+  s.write('a.jsonl', [line({ at: closed - 20 * MIN, out: 700 })]);
+  await s.usage.refresh();
+  const sum = s.usage.summary(null, { after: closed });
+  assert.equal(sum.session, null);
+  assert.equal(sum.week.tokens, 700); // still this week's work
+});
+
 test("the session Claude Code reports beats the replay's guess at it", async () => {
   const s = sandbox();
   const resetAt = Date.now() + 4 * HOUR;
@@ -238,14 +264,15 @@ test('the tray line reads the percentages when there are any', () => {
 
 test("the tray line falls back to this machine's tokens, window by window", () => {
   const { summaryLine } = sandbox().usage;
-  // a lapsed 5-hour window is reported as a percentage while the week isn't
+  // the 5-hour window Claude Code reported has closed, so its percentage is
+  // no longer anybody's — the session says tokens while the week says a figure
   assert.equal(
     summaryLine({
       session: { tokens: 1_400_000, resetAt: 1 },
-      week: { tokens: 27_000_000, resetAt: null },
-      limits: { session: { pct: 0 }, week: null },
+      week: { tokens: 27_000_000, resetAt: 2 },
+      limits: { session: null, week: { pct: 20 } },
     }),
-    'Session 0% · Week 27M'
+    'Session 1.4M · Week 20%'
   );
   assert.equal(
     summaryLine({ session: null, week: { tokens: 812, resetAt: null }, limits: null }),

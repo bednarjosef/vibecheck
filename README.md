@@ -78,28 +78,33 @@ No tray icon at all? GNOME hides them unless an extension puts them back:
 
 ## Where the numbers come from
 
-**The percentages are the real ones.** Claude Code hands every custom
-[status line](https://code.claude.com/docs/en/statusline) the account's true
-rate-limit figures, the same ones `/usage` prints. vibecheck points
-`statusLine` in `~/.claude/settings.json` at a small shim that copies those
-figures to a local file, then hands the line straight through to whatever
-status line you already had. Being upfront, since it edits a Claude Code
-setting by itself:
+**The percentages are the real ones** — the same figures `/usage` prints,
+asked for the same way `/usage` asks. Claude Code is already signed in to your
+account; vibecheck borrows that session to read your usage every few minutes,
+whether or not Claude Code is running. Being upfront, since that's your login:
 
-- only one key is touched, `statusLine`, and the previous value is saved
-- a backup of the whole file goes in vibecheck's config directory
-- an existing status line keeps working through the pass-through
-- `vibecheck --restore-statusline` puts yours back whenever you want
-- no credentials are read, and nothing leaves your machine
+- the token is Claude Code's, read from where it already sits on disk, and
+  sent only to the API it belongs to — over TLS, like every other request
+- nothing is written back, and vibecheck never refreshes the token: a refresh
+  rotates it, and a rotation kept to ourselves would log Claude Code out
+- one read-only request, `GET /api/oauth/usage`, every five minutes
+- nothing else is read, kept or sent anywhere: not your prompts, not your
+  code, not your transcripts
+- **Real percentages** in settings turns the whole thing off, and the figures
+  it fetched are deleted with it
 
-If you had no status line of your own, the shim prints `press F8 to
-vibecheck` in that row. Claude Code reserves the row as soon as any status
-line exists, so it may as well say something.
+Switched off, or signed in with an API key instead of a subscription, the
+numbers still work — counted from Claude Code's local transcripts, exact token
+totals, no account access at all. That count only sees this machine, so read
+it as an estimate of the same thing the percentages report exactly.
 
-**Without the shim the numbers still work.** They get counted from Claude
-Code's local transcripts instead: exact token totals, no account access. That
-count only sees this machine, so read it as an estimate of the same thing the
-percentages report exactly.
+**A note for anyone upgrading from 1.4 or earlier.** Those versions read the
+percentages by pointing `statusLine` in `~/.claude/settings.json` at a small
+shim. Nothing does that any more — a status line can only speak while a
+session is on screen rendering one, which left the figures aging every time
+you closed the terminal. Installs that already have the shim keep working; to
+take it back out and restore whatever status line you had before it, run
+`vibecheck --restore-statusline`.
 
 ## Platform notes
 
@@ -113,9 +118,9 @@ percentages report exactly.
 ## Removing it
 
 Quit from the tray menu, then `npm uninstall -g vibecheck-app`, or use the
-usual uninstaller for your platform. If you want your old Claude Code status
-line back, run `vibecheck --restore-statusline` first: a vibecheck that's
-still installed puts the shim back the next time it starts.
+usual uninstaller for your platform. If an older version left its shim in your
+Claude Code status line, `vibecheck --restore-statusline` puts yours back —
+and now that nothing reinstalls it, it stays back.
 
 ## License
 

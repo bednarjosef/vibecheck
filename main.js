@@ -1,5 +1,5 @@
 // vibecheck — hold a key, see Claude's status. Let go, it melts away.
-const { app, BrowserWindow, Tray, Menu, nativeImage, screen, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, screen, ipcMain, shell, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -9,6 +9,7 @@ const gnomeShortcut = require('./gnome-shortcut');
 const kdeShortcut = require('./kde-shortcut');
 const { ensureDesktopIntegration } = require('./desktop-integration');
 const usage = require('./usage');
+const account = require('./account');
 const keys = require('./keys');
 
 // ── config ──────────────────────────────────────────────────────────
@@ -52,6 +53,7 @@ const settings = {
   displayId: null,       // null = primary display
   position: 'top',       // which edge the pill drops in from: top | bottom
   weekReset: null,       // a real weekly reset moment, learned from Claude Code
+  accountUsage: true,    // ask the account itself for the real percentages
   statuslinePrev: null,  // the status line we displaced: the shim defers to
                          // its command, and restoring puts the object back
 };
@@ -63,7 +65,7 @@ function loadConfig() {
     const c = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
     const sc = keys.fromConfig(c.shortcut !== undefined ? c.shortcut : c.key);
     if (sc) settings.shortcut = sc;
-    for (const k of ['autoReveal', 'sound', 'autostart']) {
+    for (const k of ['autoReveal', 'sound', 'autostart', 'accountUsage']) {
       if (typeof c[k] === 'boolean') settings[k] = c[k];
     }
     if (typeof c.displayId === 'number') settings.displayId = c.displayId;
@@ -298,13 +300,12 @@ function limitsUninstall() {
   return { ok: true };
 }
 
-// The real percentages are the whole point, so this isn't a setting: every
-// launch that finds Claude Code makes sure the shim is in place, and keeps
-// the deployed copy current when it already is. Failures stay quiet and get
-// another go next launch — a status line that didn't install is a number
-// counted from transcripts instead, not a broken app.
-//
-// The way back out is `vibecheck --restore-statusline`, below.
+// Nothing calls this any more, and that's the point: the account answers for
+// itself now (see below), so no launch edits `statusLine` in a machine-wide
+// Claude Code settings file. The shim, its installer and its uninstaller stay
+// here because installs made by earlier versions are still out there, still
+// writing limits.json, and still owed the way back out that
+// `vibecheck --restore-statusline` gives them.
 function autoSetupLimits() {
   if (!fs.existsSync(path.dirname(CLAUDE_SETTINGS))) return; // no Claude Code here
   if (limitsInstalled()) {
@@ -327,8 +328,13 @@ function readLimits(raw = readLimitsFile()) {
     const pick = (w) => {
       if (!w || typeof w.used_percentage !== 'number') return null;
       const resetAt = typeof w.resets_at === 'number' ? w.resets_at * 1000 : null;
-      // window reset since Claude Code last reported — 0 until fresh data
-      if (resetAt && now >= resetAt) return { pct: 0, resetAt: null };
+      // The window this percentage belonged to has closed since Claude Code
+      // last reported. Whatever opened in its place is however full it is —
+      // by the time anyone looks, rarely empty. So the figure is unknown, not
+      // zero, and unknown is what the pill is told: it then reads the token
+      // tally, exactly as it does where the shim has never spoken. Reporting
+      // 0% here said "nothing used" over a tally of millions.
+      if (resetAt && now >= resetAt) return null;
       return { pct: Math.round(w.used_percentage), resetAt };
     };
     const session = pick(raw.five_hour);
@@ -348,6 +354,68 @@ function watchLimits() {
   } catch (_) {} // no watcher = the 60s poll still picks changes up
 }
 
+// ── the account's own figures ───────────────────────────────────────
+// Where the numbers actually come from now. A status line can only speak
+// while a session is on screen rendering one, which is precisely when the
+// figures need no help; the moment the terminal closes they start aging, and
+// a window that rolls over after that leaves the pill with nothing true to
+// say. So the account is asked directly, on a timer, running or not.
+//
+// The answer is written into the same limits.json the shim wrote, in the same
+// shape, so there is still one store and every reader of it is unchanged.
+const ACCOUNT_MS = 5 * 60_000;
+const ACCOUNT_MAX_MS = 60 * 60_000; // ceiling for the backoff below
+const ACCOUNT_MIN_MS = 30_000; // floor for polls that a person triggered
+let accountTimer = null;
+let accountWait = ACCOUNT_MS;
+let accountAt = 0;
+let accountBusy = false;
+
+function writeLimits(limits) {
+  const dir = app.getPath('userData');
+  fs.mkdirSync(dir, { recursive: true });
+  const tmp = path.join(dir, 'limits.json.tmp');
+  fs.writeFileSync(tmp, JSON.stringify(limits));
+  fs.renameSync(tmp, LIMITS_PATH); // atomic, exactly as the shim does it
+}
+
+// Always reschedules itself, so the chain can't be broken by one bad answer.
+// There are many ordinary ways to get nothing back — no Claude Code, an
+// API-key user, a laptop off the network, a session that has expired since
+// the last poll — and none of them deserve a message. They just mean asking
+// less often, until something is there to hear.
+async function pollAccount() {
+  clearTimeout(accountTimer);
+  if (!settings.accountUsage) return; // switching it back on starts this again
+  if (accountBusy) return; // the request already in flight schedules the next
+  accountBusy = true;
+  accountAt = Date.now();
+  let limits = null;
+  try {
+    limits = await account.fetchLimits({ fetch: (...a) => net.fetch(...a) });
+  } finally {
+    accountBusy = false;
+  }
+  if (!settings.accountUsage) return; // switched off while we were asking
+  if (limits) {
+    accountWait = ACCOUNT_MS;
+    try {
+      writeLimits(limits);
+    } catch (_) {}
+    sendUsage();
+  } else {
+    accountWait = Math.min(accountWait * 2, ACCOUNT_MAX_MS);
+  }
+  clearTimeout(accountTimer); // one chain, however many callers asked
+  accountTimer = setTimeout(pollAccount, accountWait);
+}
+
+// Opening the pill is a good moment to be current — but a key that toggles
+// isn't a reason to ask the API twice a second.
+function pollAccountSoon() {
+  if (settings.accountUsage && Date.now() - accountAt >= ACCOUNT_MIN_MS) pollAccount();
+}
+
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const SESSION_MS = 5 * 60 * 60 * 1000;
 
@@ -355,9 +423,17 @@ const SESSION_MS = 5 * 60 * 60 * 1000;
 // moment it lapses: it reopens whenever you next send a message, not on a
 // fixed cadence. So it's used while Claude Code is reporting it, and the
 // transcript replay takes over when it isn't.
-function sessionWindow(limits) {
-  const at = limits && limits.session && limits.session.resetAt;
-  return Number.isFinite(at) ? { since: at - SESSION_MS, resetAt: at } : null;
+//
+// Read from the file rather than readLimits(), for the same reason the week
+// is: a moment that has passed is no longer a percentage worth showing, but
+// it's still the one thing known about the window running now — that it can't
+// have opened any earlier. Without that floor the replay keeps a pre-reset
+// block alive for hours, tallying work the account has already let go.
+function sessionWindow(raw = readLimitsFile()) {
+  const secs = raw && raw.five_hour && raw.five_hour.resets_at;
+  if (typeof secs !== 'number') return null;
+  const at = secs * 1000;
+  return at > Date.now() ? { since: at - SESSION_MS, resetAt: at } : { after: at };
 }
 
 // The account's weekly reset moment isn't in the transcripts — Claude Code
@@ -379,8 +455,15 @@ function learnWeekReset(raw = readLimitsFile()) {
   const secs = raw && raw.seven_day && raw.seven_day.resets_at;
   if (typeof secs !== 'number') return;
   const at = secs * 1000;
-  // same moment in the weekly cadence = nothing new to learn
-  if (Number.isFinite(settings.weekReset) && (at - settings.weekReset) % WEEK_MS === 0) return;
+  // Same moment in the weekly cadence = nothing new to learn. Compared
+  // loosely, for the reason the window marks are: the account states this to
+  // the microsecond and answers a second or two apart on consecutive polls,
+  // which must not read as a new week and rewrite the config file every five
+  // minutes for the rest of time.
+  if (Number.isFinite(settings.weekReset)) {
+    const drift = (((at - settings.weekReset) % WEEK_MS) + WEEK_MS) % WEEK_MS;
+    if (drift < 60_000 || drift > WEEK_MS - 60_000) return;
+  }
   settings.weekReset = at;
   saveConfig();
 }
@@ -424,7 +507,7 @@ function sendUsage() {
   const raw = readLimitsFile(); // one read feeds both
   learnWeekReset(raw);
   const limits = readLimits(raw);
-  const local = usage.summary(weekWindow(), sessionWindow(limits));
+  const local = usage.summary(weekWindow(), sessionWindow(raw));
   const data =
     local || limits ? { ...(local || { session: null, week: null }), limits } : null;
   lastUsage = data;
@@ -442,6 +525,7 @@ function show(quiet = false) {
   // response swaps in a beat later (2s guard so toggle-spam doesn't refetch)
   if (Date.now() - lastFetched > 2_000) fetchStatus();
   refreshUsage();
+  pollAccountSoon();
   positionWindow(); // monitors may have changed since last time
   if (win && !win.isDestroyed()) {
     win.webContents.send('reveal');
@@ -894,6 +978,18 @@ ipcMain.handle('settings:set', async (_e, patch) => {
     settings.autostart = !!patch.autostart;
     applyAutostart();
   }
+  if ('accountUsage' in patch) {
+    settings.accountUsage = !!patch.accountUsage;
+    // turned off, the last figures it fetched would sit there looking current
+    if (!settings.accountUsage) {
+      clearTimeout(accountTimer);
+      try { fs.rmSync(LIMITS_PATH, { force: true }); } catch (_) {}
+      sendUsage();
+    } else {
+      accountWait = ACCOUNT_MS;
+      pollAccount();
+    }
+  }
   if ('displayId' in patch) {
     settings.displayId = typeof patch.displayId === 'number' ? patch.displayId : null;
     positionWindow();
@@ -1090,7 +1186,7 @@ if (!app.requestSingleInstanceLock()) {
     }
     fetchStatus();
     setInterval(fetchStatus, POLL_MS);
-    autoSetupLimits();
+    pollAccount();
     refreshUsage();
     setInterval(refreshUsage, POLL_MS);
     watchLimits();

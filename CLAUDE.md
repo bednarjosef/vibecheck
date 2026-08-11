@@ -2,8 +2,9 @@
 
 An Electron tray app: hold a key, see Claude's status and how much of your
 Claude Code limits you've spent. `main.js` is the main process, `index.html`
-is the pill and `settings.html` the settings window, and `usage.js` derives
-token counts from Claude Code's local transcripts.
+is the pill and `settings.html` the settings window, `account.js` fetches the
+account's real percentages, and `usage.js` derives token counts from Claude
+Code's local transcripts when they aren't available.
 
 ## npm publishing — manual only
 
@@ -55,14 +56,20 @@ Four more things, which have each cost a wrong conclusion:
 - **Don't assert on live token totals.** `usage.js` reads
   `~/.claude/projects/**`, which every running Claude Code session appends to.
   Inject a `limits.json` and assert on that.
-- **Every launch installs the status-line shim.** There's no setting for it
-  any more: startup writes `statusLine` in `~/.claude/settings.json`, which is
-  machine-wide, pointing at the *launching profile's* copy of the shim. On a
-  machine where it's already installed a test instance only refreshes its own
-  throwaway copy and leaves the file alone — but a test that starts from a
-  clean `~/.claude` will aim the real setting at a temp path. Check
-  `statusLine` before and after, and `vibecheck --restore-statusline` puts the
-  previous one back.
+- **`limits.json` has a second writer, and it's us.** The account poll
+  (`account.js`, every 5 minutes) writes the same file the shim writes, in the
+  same shape, so one store is still the whole story. It needs a live OAuth
+  token in `~/.claude/.credentials.json` — expired or absent, it returns null
+  and writes nothing, which is also what happens on a machine signed in with
+  an API key. Seed `limits.json` *and* set `accountUsage: false` in the test
+  profile's `config.json`, or the poll will overwrite the fixture within five
+  minutes.
+- **Nothing installs the status-line shim any more.** `autoSetupLimits()`,
+  `limitsInstall()` and the shim itself are still here — installs from 1.4 and
+  earlier are still out there writing `limits.json`, and still owed
+  `vibecheck --restore-statusline`. But no launch writes `statusLine` in
+  `~/.claude/settings.json` now, so a test instance can't aim the real
+  machine-wide setting at a temp path the way it used to.
 - **Record events, don't sample state.** An auto-peek lasts a few seconds, so
   checking whether the pill is visible some time later proves nothing either
   way. Listen for `reveal` and keep timestamps.

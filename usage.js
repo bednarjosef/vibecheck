@@ -135,6 +135,8 @@ function refresh() {
 
 // Each window is either the account's real one, { since, resetAt }, or null —
 // then the week falls back to a rolling 7 days and the session to a replay.
+// A session may also arrive as { after }: no live window, but the moment the
+// last one closed, which is a floor the replay can start from.
 const dated = (w) => !!w && Number.isFinite(w.since) && Number.isFinite(w.resetAt);
 
 function summary(week, session) {
@@ -160,15 +162,20 @@ function summary(week, session) {
   if (dated(session)) {
     block = { tokens: since(session.since), resetAt: session.resetAt };
   } else {
+    // A window that has closed is still worth this much: whatever block is
+    // running now opened after it, so marks from before it are another
+    // window's work and can't anchor this one.
+    const floor = session && Number.isFinite(session.after) ? session.after : 0;
     let start = 0;
     let end = 0;
     for (const b of [...marks.keys()].sort((x, y) => x - y)) {
+      if (b < floor) continue;
       if (b >= end) {
         start = b;
         end = start + SESSION_MS;
       }
     }
-    if (now < end) block = { tokens: since(start), resetAt: end };
+    if (end && now < end) block = { tokens: since(start), resetAt: end };
   }
 
   const realWeek = dated(week);

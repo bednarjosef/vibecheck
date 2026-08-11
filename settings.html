@@ -185,6 +185,10 @@
         </select>
       </div>
       <div class="row">
+        <div><div class="lbl">Real percentages</div><div class="sub">asks Claude for your usage, signed in as Claude Code already is</div></div>
+        <input type="checkbox" id="accountUsage" />
+      </div>
+      <div class="row">
         <div><div class="lbl">Start at login</div></div>
         <input type="checkbox" id="autostart" />
       </div>
@@ -223,6 +227,7 @@
     $('autoReveal').checked = s.settings.autoReveal;
     $('sound').checked = s.settings.sound;
     $('autostart').checked = s.settings.autostart;
+    $('accountUsage').checked = s.settings.accountUsage;
     $('soundTheme').value = s.settings.soundTheme;
     $('position').value = s.settings.position;
     syncSoundTheme();
@@ -275,7 +280,7 @@
   );
   $('soundTheme').addEventListener('change', (e) => window.vc.set({ soundTheme: e.target.value }));
   $('position').addEventListener('change', (e) => window.vc.set({ position: e.target.value }));
-  for (const id of ['autoReveal', 'sound', 'autostart']) {
+  for (const id of ['autoReveal', 'sound', 'autostart', 'accountUsage']) {
     $(id).addEventListener('change', (e) => window.vc.set({ [id]: e.target.checked }));
   }
   $('sound').addEventListener('change', syncSoundTheme);
