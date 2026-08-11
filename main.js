@@ -497,9 +497,28 @@ function noteUsageMarks(limits) {
   }
 }
 
+// A card that shows up on its own still has to sound like it showed up. The
+// peek that reveals it is deliberately quiet, because a status change plays
+// its own two-note phrase and the reveal would talk over it — but a milestone
+// and a new version have no phrase of their own, so they borrow the one the
+// pill uses whenever it arrives. Without this they let themselves in, said
+// something, and said it silently.
+//
+// Once per card, not once per notice: both windows can cross in the same poll,
+// and the second notice replaces the first on the card rather than stacking
+// beside it.
+let chimedAt = 0;
+
+function chimeArrival() {
+  if (!settings.sound || Date.now() - chimedAt < 1_000) return;
+  chimedAt = Date.now();
+  sendChime('open');
+}
+
 function announce(window, pct) {
   if (!settings.autoReveal) return;
   if (win && !win.isDestroyed()) win.webContents.send('notice', { window, pct });
+  chimeArrival();
   autoPeek(6_000);
 }
 
@@ -931,6 +950,7 @@ function announceUpdate(version) {
   if (win && !win.isDestroyed()) {
     win.webContents.send('notice', { text: `vibecheck v${version} is out`, bare: true });
   }
+  chimeArrival();
   autoPeek(6_000);
 }
 
