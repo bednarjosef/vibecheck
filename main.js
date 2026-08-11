@@ -131,7 +131,7 @@ async function setShortcut(sc) {
   settings.shortcut = sc;
   holdKey = sc.code;
   saveConfig();
-  if (tray) tray.setToolTip(`vibecheck — ${keys.name(sc)}: usage + Claude status`);
+  updateTray();
   await syncSystemBinding();
 }
 
@@ -184,7 +184,9 @@ let win = null;
 let tray = null;
 let settingsWin = null;
 let holding = false;
+let hookFailed = false;
 let lastData = null;
+let lastUsage = null;
 let lastFetched = 0;
 let fetching = false;
 let visible = false;
@@ -408,7 +410,9 @@ function sendUsage() {
   const local = usage.summary(weekWindow(), sessionWindow(limits));
   const data =
     local || limits ? { ...(local || { session: null, week: null }), limits } : null;
+  lastUsage = data;
   if (win && !win.isDestroyed()) win.webContents.send('usage', data);
+  updateTray();
   noteUsageMarks(limits);
 }
 
@@ -651,6 +655,7 @@ async function fetchStatus() {
   }
   fetching = false;
   if (win && !win.isDestroyed()) win.webContents.send('status', lastData);
+  updateTray();
 
   // react to changes — a change in Claude's health, and separately losing
   // sight of it, which is a different kind of news and reads on its own path
@@ -714,17 +719,50 @@ function createWindow() {
 function createTray() {
   const icon = nativeImage.createFromBuffer(Buffer.from(TRAY_PNG, 'base64'));
   tray = new Tray(icon.resize({ width: 16, height: 16 }));
-  tray.setToolTip(`vibecheck — ${keys.name(settings.shortcut)}: usage + Claude status`);
   buildTrayMenu();
+  updateTray();
 }
 
-// deliberately short: the numbers live in the pill, and showing it already
-// refreshes them
+// ── what the tray says ──────────────────────────────────────────────
+// The tray icon is the one piece of vibecheck that's on screen the whole
+// time, and it used to carry nothing but its own name. Both the surfaces it
+// has now carry the two figures: the tooltip, and a header line in the menu
+// — because the app-indicator shells GNOME needs for a tray at all drop
+// tooltips on the floor, and that's precisely where the icon is hardest to
+// do without.
+let trayLine = '';
+
+function updateTray() {
+  if (!tray) return;
+  const line = usage.summaryLine(lastUsage);
+  const lines = [`vibecheck — tap ${keys.name(settings.shortcut)}`];
+  if (line) lines.push(line);
+  if (lastData) {
+    // Windows truncates a tooltip at 127 characters, and an incident title
+    // can run long enough to eat the lines above it
+    const health = (lastData.incident && lastData.incident.name) || lastData.description;
+    lines.push(health.length > 60 ? health.slice(0, 59) + '…' : health);
+  }
+  // Everywhere else a desktop-level binding stands in for a dead hook. On
+  // macOS it's the only way in, so a hook that never started means the key
+  // does nothing at all, and this is the last place left to say so.
+  if (hookFailed && process.platform === 'darwin') {
+    lines.push('key needs Accessibility permission');
+  }
+  tray.setToolTip(lines.join('\n'));
+  if (line !== trayLine) {
+    trayLine = line; // rebuilding the menu on every poll would flicker the icon
+    buildTrayMenu();
+  }
+}
+
 function buildTrayMenu() {
-  const template = [
+  const template = [];
+  if (trayLine) template.push({ label: trayLine, enabled: false }, { type: 'separator' });
+  template.push(
     { label: 'Show/hide status', click: () => toggle() },
-    { label: 'Settings…', click: () => openSettings() },
-  ];
+    { label: 'Settings…', click: () => openSettings() }
+  );
   if (updateAvailable) {
     template.push({ type: 'separator' });
     template.push({
@@ -953,6 +991,8 @@ function startHook() {
   try {
     uIOhook.start();
   } catch (err) {
+    hookFailed = true;
+    updateTray();
     console.error(
       'Could not start the global key hook.\n' +
         'On macOS: System Settings → Privacy & Security → Accessibility → allow your terminal/Electron.\n',

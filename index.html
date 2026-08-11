@@ -480,7 +480,8 @@
   let usageData = null;
   let statusData = null;
 
-  // tokens read well at three digits max: 812 → 45K → 1.2M → 38M
+  // tokens read well at three digits max: 812 → 45K → 1.2M → 38M. The tray
+  // shows the same figures from usage.js — keep the two in step.
   const fmtTokens = (n) =>
     n >= 1e9
       ? (n >= 1e10 ? Math.round(n / 1e9) : parseFloat((n / 1e9).toFixed(1))) + 'B'

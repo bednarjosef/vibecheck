@@ -181,4 +181,35 @@ function summary(week, session) {
   };
 }
 
-module.exports = { refresh, summary };
+// tokens read well at three digits max: 812 → 45K → 1.2M → 38M. The pill
+// carries its own copy of this (an inline page can't require), so the two
+// have to be changed together — the tray and the card can't disagree about
+// a number they're both showing.
+function fmtTokens(n) {
+  if (n >= 1e9) return (n >= 1e10 ? Math.round(n / 1e9) : parseFloat((n / 1e9).toFixed(1))) + 'B';
+  if (n >= 1e6) return (n >= 1e7 ? Math.round(n / 1e6) : parseFloat((n / 1e6).toFixed(1))) + 'M';
+  if (n >= 1000) return Math.round(n / 1000) + 'K';
+  return String(n);
+}
+
+// Both windows on one line, for the tray: the same choice the pill makes,
+// window by window — the real percentage where Claude Code is reporting one,
+// this machine's token count where it isn't. It takes the object the pill is
+// sent, so the two can't drift, and it lives here so it can be read without
+// starting an app.
+function summaryLine(data) {
+  if (!data) return '';
+  const limits = data.limits || {};
+  const label = (limit, local) => {
+    if (limit && typeof limit.pct === 'number') return limit.pct + '%';
+    if (local && typeof local.tokens === 'number') return fmtTokens(local.tokens);
+    return null;
+  };
+  const session = label(limits.session, data.session);
+  const week = label(limits.week, data.week);
+  return [session && `Session ${session}`, week && `Week ${week}`]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+module.exports = { refresh, summary, fmtTokens, summaryLine };
