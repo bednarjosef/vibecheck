@@ -182,11 +182,26 @@ function deriveIndicator(components) {
   return INDICATOR[worst];
 }
 
-const TRAY_PNG =
-  'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAiElEQVR4nO2W0RGAMAhD0Y1c' +
-  'wKEcxKG6gCPpBEBC26N3kl9J8oq9U5FS6e/aIqbzuV/tWTsuKpMatoqjIPuMcmYeAmDLGZ8L' +
-  'EC1H/SZAbzmSA9+BWVIBRp3ey1t3AwVQAOkA7FfNk5a37gZExm3BynE30Avh+aFXEIVAfPAd' +
-  'YCHQ+fR/wlIpXR+EhjQo/gSTagAAAABJRU5ErkJggg==';
+// ── the tray mark ───────────────────────────────────────────────────
+// The pill's spark, cut down to sixteen pixels (assets/make-tray-icons.js),
+// painted in the colour the pill would give the same news. The icon is the
+// one piece of vibecheck that's always on screen, so it answers the question
+// instead of sitting next to it — green means you'd have found nothing worth
+// reading inside.
+//
+// Colour, not a template image, on macOS too: a template would flatten all
+// five states into one silhouette, and the state is the whole point.
+const trayImages = new Map();
+
+function trayImage(indicator) {
+  const state = INDICATOR.includes(indicator) ? indicator : 'unknown';
+  if (!trayImages.has(state)) {
+    // the @2x file next to it comes along by name — asking for one path
+    // gets both, and the panel takes whichever its screen deserves
+    trayImages.set(state, nativeImage.createFromPath(path.join(__dirname, 'assets', `tray-${state}.png`)));
+  }
+  return trayImages.get(state);
+}
 
 let win = null;
 let winLoaded = false;
@@ -744,23 +759,27 @@ function createWindow() {
 }
 
 function createTray() {
-  const icon = nativeImage.createFromBuffer(Buffer.from(TRAY_PNG, 'base64'));
-  tray = new Tray(icon.resize({ width: 16, height: 16 }));
+  tray = new Tray(trayImage(trayIndicator));
   buildTrayMenu();
   updateTray();
 }
 
 // ── what the tray says ──────────────────────────────────────────────
-// The tray icon is the one piece of vibecheck that's on screen the whole
-// time, and it used to carry nothing but its own name. Both the surfaces it
-// has now carry the two figures: the tooltip, and a header line in the menu
-// — because the app-indicator shells GNOME needs for a tray at all drop
+// The icon has the health, in its colour. The two figures go on both of the
+// surfaces underneath it — the tooltip, and a header line in the menu —
+// because the app-indicator shells GNOME needs for a tray at all drop
 // tooltips on the floor, and that's precisely where the icon is hardest to
 // do without.
 let trayLine = '';
+let trayIndicator = 'unknown'; // grey until the first status lands
 
 function updateTray() {
   if (!tray) return;
+  const indicator = (lastData && lastData.indicator) || 'unknown';
+  if (indicator !== trayIndicator) {
+    trayIndicator = indicator;
+    tray.setImage(trayImage(indicator));
+  }
   const line = usage.summaryLine(lastUsage);
   const lines = [`vibecheck — tap ${keys.name(settings.shortcut)}`];
   if (line) lines.push(line);

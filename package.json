@@ -30,6 +30,7 @@
       "usage.js",
       "keys.js",
       "statusline-shim.js",
+      "assets/tray-*.png",
       "fonts/**/*"
     ],
     "linux": {
@@ -120,6 +121,7 @@
     "usage.js",
     "keys.js",
     "statusline-shim.js",
+    "assets/tray-*.png",
     "fonts/jetbrains-mono-400.woff2",
     "fonts/jetbrains-mono-600.woff2",
     "fonts/OFL.txt",
