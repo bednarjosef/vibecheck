@@ -88,8 +88,7 @@
   .lbl { font-size: 12.5px; color: var(--ink); }
   .sub { margin-top: 3px; font-size: 10.5px; color: var(--faint); line-height: 1.5; }
 
-  /* the only control that ever disables is the Real limit % toggle, when
-     there's no Claude Code to talk to — it should look unavailable */
+  /* the sound theme has nothing to say while sound is off */
   select:disabled,
   input:disabled { opacity: 0.45; cursor: default; }
 
@@ -173,11 +172,11 @@
         <input type="checkbox" id="autoReveal" />
       </div>
       <div class="row">
-        <div><div class="lbl">Sound</div><div class="sub">blips on open/close · chime on status change</div></div>
+        <div class="lbl">Sound</div>
         <input type="checkbox" id="sound" />
       </div>
       <div class="row">
-        <div><div class="lbl">Sound theme</div><div class="sub">changing it plays a preview</div></div>
+        <div class="lbl">Sound theme</div>
         <select id="soundTheme">
           <option value="bells">Bells</option>
           <option value="pluck">Noteblock</option>
@@ -190,14 +189,14 @@
         <input type="checkbox" id="autostart" />
       </div>
       <div class="row">
-        <div><div class="lbl">Position</div><div class="sub">which edge it drops in from</div></div>
+        <div class="lbl">Position</div>
         <select id="position">
           <option value="top">Top</option>
           <option value="bottom">Bottom</option>
         </select>
       </div>
       <div class="row">
-        <div><div class="lbl">Display</div><div class="sub">where the pill appears</div></div>
+        <div class="lbl">Display</div>
         <select id="display"></select>
       </div>
     </main>
@@ -226,7 +225,14 @@
     $('autostart').checked = s.settings.autostart;
     $('soundTheme').value = s.settings.soundTheme;
     $('position').value = s.settings.position;
+    syncSoundTheme();
     fitWindow();
+  }
+
+  // picking a theme plays a preview, which is a strange thing to offer
+  // someone who has just turned the sound off
+  function syncSoundTheme() {
+    $('soundTheme').disabled = !$('sound').checked;
   }
 
   // the window is only ever as tall as the settings it holds
@@ -272,6 +278,7 @@
   for (const id of ['autoReveal', 'sound', 'autostart']) {
     $(id).addEventListener('change', (e) => window.vc.set({ [id]: e.target.checked }));
   }
+  $('sound').addEventListener('change', syncSoundTheme);
   $('close').addEventListener('click', () => window.vc.close());
 
   init();
