@@ -32,6 +32,11 @@ const STATUS_URL = 'https://status.claude.com/api/v2/status.json';
 const COMPONENTS_URL = 'https://status.claude.com/api/v2/components.json';
 const INCIDENTS_URL = 'https://status.claude.com/api/v2/incidents/unresolved.json';
 
+// A request with no deadline is the worst way to lose the status page: the
+// promise never settles, so the poll never fails, so the pill never learns
+// it can't see Claude and keeps showing the last good news indefinitely.
+const FETCH_MS = 10_000;
+
 // ── settings (persisted in <userData>/config.json) ──────────────────
 const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
 
@@ -181,6 +186,7 @@ let settingsWin = null;
 let holding = false;
 let lastData = null;
 let lastFetched = 0;
+let fetching = false;
 let visible = false;
 let prevIndicator = null;
 let autoPeekTimer = null;
@@ -583,12 +589,20 @@ function armBurstEnd() {
   }, RELEASE_MS);
 }
 
+const getJSON = (url) =>
+  fetch(url, { signal: AbortSignal.timeout(FETCH_MS) }).then((r) => r.json());
+
 async function fetchStatus() {
+  // a poll and a summon can land together, and a slow answer shouldn't let
+  // the interval stack requests behind it — one in flight is enough, and
+  // whoever asked second gets the same result a moment later
+  if (fetching) return;
+  fetching = true;
   try {
     const [statusRes, componentsRes, incidentsRes] = await Promise.all([
-      fetch(STATUS_URL).then((r) => r.json()),
-      fetch(COMPONENTS_URL).then((r) => r.json()),
-      fetch(INCIDENTS_URL).then((r) => r.json()),
+      getJSON(STATUS_URL),
+      getJSON(COMPONENTS_URL),
+      getJSON(INCIDENTS_URL),
     ]);
     const all = componentsRes.components
       .filter((c) => !c.group)
@@ -635,6 +649,7 @@ async function fetchStatus() {
     };
     lastFetched = Date.now();
   }
+  fetching = false;
   if (win && !win.isDestroyed()) win.webContents.send('status', lastData);
 
   // react to changes — a change in Claude's health, and separately losing
