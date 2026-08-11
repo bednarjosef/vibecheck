@@ -831,8 +831,23 @@ async function checkForUpdate() {
     if (version && newer(version, app.getVersion()) && version !== updateAvailable) {
       updateAvailable = version;
       buildTrayMenu();
+      announceUpdate(version);
     }
   } catch (_) {} // offline or unpublished — never bother the user
+}
+
+// One peek, the first time a version is seen, and nothing on the card but
+// the line and the spark: what you'd actually do about it is a command or a
+// download, neither of which belongs on something you can't click. The tray
+// menu keeps the link for as long as it's true; this is just the nudge that
+// sends you there. Same switch as every other uninvited reveal, so someone
+// who turned those off doesn't get this one either.
+function announceUpdate(version) {
+  if (!settings.autoReveal || !winLoaded) return;
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('notice', { text: `vibecheck v${version} is out`, bare: true });
+  }
+  autoPeek(6_000);
 }
 
 // ── settings window ─────────────────────────────────────────────────

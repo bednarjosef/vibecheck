@@ -529,7 +529,8 @@
     `</span><span class="when">${r.when}</span></span>`;
 
   function renderUsage() {
-    if (!usageData) {
+    // a bare notice is the whole card, so nothing gets drawn under it
+    if (!usageData || (notice && notice.bare)) {
       usageEl.classList.remove('has');
       return;
     }
@@ -554,11 +555,15 @@
     panel.classList.toggle('wide', headEl.scrollWidth > usageEl.scrollWidth + 1);
   }
 
-  // A milestone announcement, or the hello of a first launch: either way the
-  // pill let itself in to say one thing, so it says only that — no phrase, no
-  // incident title underneath it. Below 80% it's plain information and wears
-  // the ink; past that it borrows the same ramp the meters use, so the
-  // underglow is lit by the reason it appeared.
+  // A milestone announcement, the hello of a first launch, or word of a new
+  // version: either way the pill let itself in to say one thing, so it says
+  // only that, with no phrase and no incident title underneath it. Below 80%
+  // it's plain information and wears the ink; past that it borrows the same
+  // ramp the meters use, so the underglow is lit by the reason it appeared.
+  //
+  // A bare notice drops the meters as well. A new version has nothing to do
+  // with what you've spent, and the numbers would be the only thing on the
+  // card that wasn't the news.
   const WINDOW_NAME = { session: 'Session', week: 'Week' };
   let notice = null;
 
