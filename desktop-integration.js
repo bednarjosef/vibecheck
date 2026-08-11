@@ -1,6 +1,12 @@
 // When installed via npm (unpackaged), register vibecheck as a real desktop
 // app on first run: a launcher entry on Linux, an .app bundle on macOS, a
 // Start Menu shortcut on Windows. Packaged installers do this themselves.
+//
+// "First run" also means the first run of each version. What gets written out
+// here includes a copy of the icon, so a release that changes the icon has to
+// be able to say so — otherwise an upgrade in place leaves the old one in the
+// launcher forever, because neither path below moves when npm swaps the
+// package contents underneath them.
 const { app } = require('electron');
 const { execFile } = require('child_process');
 const fs = require('fs');
@@ -12,7 +18,11 @@ const MARKER = () => path.join(app.getPath('userData'), 'integration.json');
 function upToDate() {
   try {
     const m = JSON.parse(fs.readFileSync(MARKER(), 'utf8'));
-    return m.execPath === process.execPath && m.appPath === app.getAppPath();
+    return (
+      m.execPath === process.execPath &&
+      m.appPath === app.getAppPath() &&
+      m.version === app.getVersion()
+    );
   } catch (_) {
     return false;
   }
@@ -23,7 +33,11 @@ function remember() {
     fs.mkdirSync(path.dirname(MARKER()), { recursive: true });
     fs.writeFileSync(
       MARKER(),
-      JSON.stringify({ execPath: process.execPath, appPath: app.getAppPath() }, null, 2)
+      JSON.stringify(
+        { execPath: process.execPath, appPath: app.getAppPath(), version: app.getVersion() },
+        null,
+        2
+      )
     );
   } catch (_) {}
 }
