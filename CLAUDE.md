@@ -40,7 +40,13 @@ and exits. So:
 
 ## Testing this app
 
-Four things that have each cost a wrong conclusion:
+`npm test` runs `node --test` — the unit tests for `usage.js` in `test/`, with
+no dependencies and no Electron. They point `$HOME` at a temp directory and
+re-`require` the module, because `usage.js` resolves `~/.claude/projects` once
+at require time; that's also what keeps them clear of the live transcripts the
+rules below warn about. `test/` is in neither whitelist, so it doesn't ship.
+
+Four more things, which have each cost a wrong conclusion:
 
 - **`limits.json` has a live writer.** When Claude Code is running on the same
   machine, its status line rewrites the real `limits.json` continuously and
@@ -55,6 +61,12 @@ Four things that have each cost a wrong conclusion:
 - **Record events, don't sample state.** An auto-peek lasts a few seconds, so
   checking whether the pill is visible some time later proves nothing either
   way. Listen for `reveal` and keep timestamps.
+
+And one thing that isn't a wrong conclusion but a small mess: `--user-data-dir`
+does not isolate `appData`. A test instance starts on the defaults, `autostart`
+among them is `false`, and startup applies that by deleting
+`~/.config/autostart/vibecheck.desktop` — the real one. Back it up, or seed the
+test profile's `config.json` with `autostart: true`.
 
 ## Worktrees
 
