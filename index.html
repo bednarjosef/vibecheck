@@ -554,20 +554,23 @@
     panel.classList.toggle('wide', headEl.scrollWidth > usageEl.scrollWidth + 1);
   }
 
-  // A milestone announcement: the pill let itself in to say one thing, so it
-  // says only that — no phrase, no incident title underneath it. Below 80%
-  // it's plain information and wears the ink; past that it borrows the same
-  // ramp the meters use, so the underglow is lit by the reason it appeared.
+  // A milestone announcement, or the hello of a first launch: either way the
+  // pill let itself in to say one thing, so it says only that — no phrase, no
+  // incident title underneath it. Below 80% it's plain information and wears
+  // the ink; past that it borrows the same ramp the meters use, so the
+  // underglow is lit by the reason it appeared.
   const WINDOW_NAME = { session: 'Session', week: 'Week' };
   let notice = null;
 
   const noticeText = (n) =>
-    n.pct >= 100
-      ? `${WINDOW_NAME[n.window]} limit reached`
-      : `${WINDOW_NAME[n.window]} ${n.pct}% used`;
+    n.text
+      ? n.text
+      : n.pct >= 100
+        ? `${WINDOW_NAME[n.window]} limit reached`
+        : `${WINDOW_NAME[n.window]} ${n.pct}% used`;
 
-  const noticeTone = (pct) =>
-    pct >= 95 ? 'var(--tone-hot)' : pct >= 80 ? 'var(--tone-warm)' : 'var(--ink)';
+  const noticeTone = (n) =>
+    n.pct >= 95 ? 'var(--tone-hot)' : n.pct >= 80 ? 'var(--tone-warm)' : 'var(--ink)';
 
   const BLANK = { indicator: 'unknown', components: [], incident: null };
 
@@ -575,7 +578,7 @@
     if (data) statusData = data;
     const d = statusData || BLANK;
     const s = WORDS[d.indicator] || WORDS.unknown;
-    panel.style.setProperty('--status-color', notice ? noticeTone(notice.pct) : s.color);
+    panel.style.setProperty('--status-color', notice ? noticeTone(notice) : s.color);
     wordEl.textContent = notice ? noticeText(notice) : phraseFrom(d.indicator, reroll);
 
     // the human-written incident title beats raw component states

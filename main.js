@@ -57,6 +57,7 @@ const settings = {
   limitsSetup: false,    // auto-setup ran (or the user chose) — don't re-decide for them
 };
 let holdKey = settings.shortcut.code;
+let firstRun = false; // no config on disk: nobody has ever seen this app
 
 function loadConfig() {
   try {
@@ -71,8 +72,15 @@ function loadConfig() {
     if (SOUND_THEMES.includes(c.soundTheme)) settings.soundTheme = c.soundTheme;
     if (POSITIONS.includes(c.position)) settings.position = c.position;
     if (c.statuslinePrev && typeof c.statuslinePrev === 'object') settings.statuslinePrev = c.statuslinePrev;
-  } catch (_) {} // no config yet, or unreadable — stay on the defaults
+  } catch (err) {
+    // no config yet, or unreadable — stay on the defaults. A file that isn't
+    // there is a first launch: worth saying hello about, and worth writing
+    // one for right away, because the shim reads the shortcut's name out of
+    // that file and until it exists has nothing to tell people to press.
+    if (err.code === 'ENOENT') firstRun = true;
+  }
   holdKey = settings.shortcut.code;
+  if (firstRun) saveConfig();
 }
 
 function sendChime(kind) {
@@ -181,6 +189,7 @@ const TRAY_PNG =
   'YCHQ+fR/wlIpXR+EhjQo/gSTagAAAABJRU5ErkJggg==';
 
 let win = null;
+let winLoaded = false;
 let tray = null;
 let settingsWin = null;
 let holding = false;
@@ -461,6 +470,21 @@ function autoPeek(ms) {
   }, ms);
 }
 
+// An overlay nobody has seen yet is indistinguishable from one that never
+// started: the tray icon is hidden by default on GNOME, the pill waits to be
+// summoned, and the key is only a default until something says what it is.
+// So the first launch introduces itself — once, then never again. It waits
+// for the first status so the card arrives with something on it, and that
+// wait is bounded by FETCH_MS whether or not the network answers.
+function greet() {
+  if (!firstRun || !winLoaded || !lastData) return;
+  firstRun = false;
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('notice', { text: `Press ${keys.name(settings.shortcut)} to vibecheck` });
+  }
+  autoPeek(6_000);
+}
+
 function positionWindow() {
   if (!win || win.isDestroyed()) return;
   const target =
@@ -656,6 +680,7 @@ async function fetchStatus() {
   fetching = false;
   if (win && !win.isDestroyed()) win.webContents.send('status', lastData);
   updateTray();
+  greet(); // the card has something to say now
 
   // react to changes — a change in Claude's health, and separately losing
   // sight of it, which is a different kind of news and reads on its own path
@@ -710,9 +735,11 @@ function createWindow() {
   positionWindow();
   win.loadFile('index.html');
   win.webContents.on('did-finish-load', () => {
+    winLoaded = true;
     if (lastData) win.webContents.send('status', lastData);
     sendPosition();
     refreshUsage(); // waits out any in-flight scan — never paints partial numbers
+    greet(); // there's a page to say it on now
   });
 }
 
