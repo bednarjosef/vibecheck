@@ -20,8 +20,15 @@ const args = [
   ...passthrough,
 ];
 
+// Terminals that live inside an Electron app can export this, and it tells
+// the binary we just resolved to behave as plain node — which runs main.js
+// with no `app` object and kills it on the first line. Detached, with stdio
+// thrown away, that failure is completely silent.
+const env = { ...process.env };
+delete env.ELECTRON_RUN_AS_NODE;
+
 if (foreground) {
-  spawn(electron, args, { stdio: 'inherit' }).on('exit', (code) => process.exit(code ?? 0));
+  spawn(electron, args, { env, stdio: 'inherit' }).on('exit', (code) => process.exit(code ?? 0));
 } else {
-  spawn(electron, args, { detached: true, stdio: 'ignore' }).unref();
+  spawn(electron, args, { env, detached: true, stdio: 'ignore' }).unref();
 }
