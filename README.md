@@ -89,14 +89,14 @@ No tray icon at all? GNOME hides them unless an extension puts them back:
 
 **The percentages are the real ones** — the same figures `/usage` prints,
 asked for the same way `/usage` asks. Claude Code is already signed in to your
-account; vibecheck borrows that session to read your usage every few minutes,
+account; vibecheck borrows that session to read your usage every minute,
 whether or not Claude Code is running. Being upfront, since that's your login:
 
 - the token is Claude Code's, read from where it already sits on disk, and
   sent only to the API it belongs to — over TLS, like every other request
 - nothing is written back, and vibecheck never refreshes the token: a refresh
   rotates it, and a rotation kept to ourselves would log Claude Code out
-- one read-only request, `GET /api/oauth/usage`, every five minutes
+- one read-only request, `GET /api/oauth/usage`, once a minute
 - nothing else is read, kept or sent anywhere: not your prompts, not your
   code, not your transcripts
 - **Real percentages** in settings turns the whole thing off, and the figures
@@ -111,8 +111,10 @@ it as an estimate of the same thing the percentages report exactly.
 percentages by pointing `statusLine` in `~/.claude/settings.json` at a small
 shim. Nothing does that any more — a status line can only speak while a
 session is on screen rendering one, which left the figures aging every time
-you closed the terminal. Installs that already have the shim keep working; to
-take it back out and restore whatever status line you had before it, run
+you closed the terminal. The shim's numbers are no longer read at all: the
+account answers directly instead. If an old install left the shim in your
+status line, it's just writing a file nobody reads — take it back out and
+restore whatever status line you had before it with
 `vibecheck --restore-statusline`.
 
 ## Platform notes

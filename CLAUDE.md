@@ -50,20 +50,23 @@ rules below warn about. `test/` is in neither whitelist, so it doesn't ship.
 Four more things, which have each cost a wrong conclusion:
 
 - **`limits.json` has a live writer.** When Claude Code is running on the same
-  machine, its status line rewrites the real `limits.json` continuously and
-  will overwrite whatever a test puts there, mid-run. Isolate with
-  `--user-data-dir`.
+  machine, a 1.4-era status-line shim may rewrite the real `limits.json`
+  continuously, mid-run. The app no longer *reads* shim writes (they lack the
+  `source: "account"` stamp), but they can still clobber a fixture's bytes.
+  Isolate with `--user-data-dir`.
 - **Don't assert on live token totals.** `usage.js` reads
   `~/.claude/projects/**`, which every running Claude Code session appends to.
   Inject a `limits.json` and assert on that.
-- **`limits.json` has a second writer, and it's us.** The account poll
-  (`account.js`, every 5 minutes) writes the same file the shim writes, in the
-  same shape, so one store is still the whole story. It needs a live OAuth
-  token in `~/.claude/.credentials.json` — expired or absent, it returns null
-  and writes nothing, which is also what happens on a machine signed in with
-  an API key. Seed `limits.json` *and* set `accountUsage: false` in the test
-  profile's `config.json`, or the poll will overwrite the fixture within five
-  minutes.
+- **A `limits.json` fixture needs the stamp.** `readLimitsFile()` ignores any
+  file without `"source": "account"` at the top level — that's how shim
+  writes are shut out — so an unstamped fixture silently reads as "no file"
+  and the pill falls back to token tallies. The only writer that's read is
+  the account poll (`account.js`, every minute). It needs a live OAuth token
+  in `~/.claude/.credentials.json` — expired or absent, it returns null and
+  writes nothing, which is also what happens on a machine signed in with an
+  API key. Seed a stamped `limits.json` *and* set `accountUsage: false` in
+  the test profile's `config.json`, or the poll will overwrite the fixture
+  within a minute.
 - **Nothing installs the status-line shim any more.** `autoSetupLimits()`,
   `limitsInstall()` and the shim itself are still here — installs from 1.4 and
   earlier are still out there writing `limits.json`, and still owed

@@ -232,7 +232,7 @@ const CLAUDE_SETTINGS = path.join(os.homedir(), '.claude', 'settings.json');
 const SHIM_SRC = path.join(__dirname, 'statusline-shim.js');
 const SHIM_DEST = path.join(app.getPath('userData'), 'statusline-shim.js');
 const LIMITS_PATH = path.join(app.getPath('userData'), 'limits.json');
-const LIMITS_STALE_MS = 14 * 24 * 60 * 60 * 1000; // shim gone quiet — forget its numbers
+const LIMITS_STALE_MS = 14 * 24 * 60 * 60 * 1000; // poll gone quiet — forget its numbers
 
 const isShimCommand = (sl) =>
   !!(sl && typeof sl.command === 'string' && sl.command.includes('statusline-shim'));
@@ -317,7 +317,14 @@ function autoSetupLimits() {
 
 function readLimitsFile() {
   try {
-    return JSON.parse(fs.readFileSync(LIMITS_PATH, 'utf8'));
+    const raw = JSON.parse(fs.readFileSync(LIMITS_PATH, 'utf8'));
+    // Only the account poll's own writes count now. Shims from 1.4-era
+    // installs still overwrite this file whenever Claude Code replies, and
+    // their figures drift a fraction of a percent from the account's — two
+    // writers flapping around a decile boundary is what made milestone
+    // notifications fire twice. Their writes carry no stamp, so they fall
+    // through to the same fallback as no file at all: the token tally.
+    return raw && raw.source === 'account' ? raw : null;
   } catch (_) { return null; } // absent or malformed — pill falls back to token counts
 }
 
@@ -343,16 +350,20 @@ function readLimits(raw = readLimitsFile()) {
   } catch (_) { return null; } // absent or malformed — pill falls back to token counts
 }
 
-function watchLimits() {
-  let t = null;
-  try {
-    fs.watch(app.getPath('userData'), (_ev, name) => {
-      if (name !== 'limits.json') return;
-      clearTimeout(t);
-      t = setTimeout(sendUsage, 250); // debounce the tmp+rename pair
-    });
-  } catch (_) {} // no watcher = the 60s poll still picks changes up
-}
+// Disconnected along with the shim: the only writer this watcher existed to
+// hear was the shim (the account poll calls sendUsage itself after writing),
+// and shim writes are no longer read at all. Kept, commented, in case a
+// second writer ever earns its way back in.
+// function watchLimits() {
+//   let t = null;
+//   try {
+//     fs.watch(app.getPath('userData'), (_ev, name) => {
+//       if (name !== 'limits.json') return;
+//       clearTimeout(t);
+//       t = setTimeout(sendUsage, 250); // debounce the tmp+rename pair
+//     });
+//   } catch (_) {} // no watcher = the 60s poll still picks changes up
+// }
 
 // ── the account's own figures ───────────────────────────────────────
 // Where the numbers actually come from now. A status line can only speak
@@ -361,9 +372,10 @@ function watchLimits() {
 // a window that rolls over after that leaves the pill with nothing true to
 // say. So the account is asked directly, on a timer, running or not.
 //
-// The answer is written into the same limits.json the shim wrote, in the same
-// shape, so there is still one store and every reader of it is unchanged.
-const ACCOUNT_MS = 5 * 60_000;
+// The answer is written into the same limits.json the shim wrote, in the
+// same shape plus a `source` stamp — and only stamped writes are read back,
+// so the account is now the single voice however many old shims still write.
+const ACCOUNT_MS = 60_000;
 const ACCOUNT_MAX_MS = 60 * 60_000; // ceiling for the backoff below
 const ACCOUNT_MIN_MS = 30_000; // floor for polls that a person triggered
 let accountTimer = null;
@@ -375,7 +387,8 @@ function writeLimits(limits) {
   const dir = app.getPath('userData');
   fs.mkdirSync(dir, { recursive: true });
   const tmp = path.join(dir, 'limits.json.tmp');
-  fs.writeFileSync(tmp, JSON.stringify(limits));
+  // the stamp is what readLimitsFile() looks for — shim writes don't carry it
+  fs.writeFileSync(tmp, JSON.stringify({ ...limits, source: 'account' }));
   fs.renameSync(tmp, LIMITS_PATH); // atomic, exactly as the shim does it
 }
 
@@ -475,8 +488,8 @@ function learnWeekReset(raw = readLimitsFile()) {
 const marks = { session: null, week: null };
 
 // Same window, told apart by when it ends. Compared loosely on purpose: the
-// shim rewrites the moment on every Claude Code reply, and a second of drift
-// in that value must not read as "a new window" — that would reseed the mark
+// account restates the moment on every poll, answering a second or two apart,
+// and that drift must not read as "a new window" — that would reseed the mark
 // and swallow the crossing silently.
 const sameWindow = (a, b) =>
   a === b || (Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) < 60_000);
@@ -490,10 +503,17 @@ function noteUsageMarks(limits) {
     }
     const seen = marks[key];
     const decile = Math.floor(w.pct / 10);
-    marks[key] = { resetAt: w.resetAt, decile };
-    // a decile can be crossed by more than one step at a time (a long reply
-    // lands as one jump) — that's still one announcement, of where it landed
-    if (seen && sameWindow(seen.resetAt, w.resetAt) && decile > seen.decile) announce(key, w.pct);
+    if (seen && sameWindow(seen.resetAt, w.resetAt)) {
+      // The mark only ratchets up: a reading that dips (rounding, a source
+      // restating itself) must not lower it, or the next tick back up would
+      // read as a fresh crossing and announce the same milestone again.
+      marks[key] = { resetAt: w.resetAt, decile: Math.max(decile, seen.decile) };
+      // a decile can be crossed by more than one step at a time (a long reply
+      // lands as one jump) — that's still one announcement, of where it landed
+      if (decile > seen.decile) announce(key, w.pct);
+    } else {
+      marks[key] = { resetAt: w.resetAt, decile };
+    }
   }
 }
 
@@ -1304,7 +1324,7 @@ if (!app.requestSingleInstanceLock()) {
     pollAccount();
     refreshUsage();
     setInterval(refreshUsage, POLL_MS);
-    watchLimits();
+    // watchLimits() — see its definition: only the shim needed watching for
     setTimeout(checkForUpdate, 15_000);
     setInterval(checkForUpdate, 24 * 60 * 60 * 1000);
     setInterval(checkReplaced, POLL_MS);
