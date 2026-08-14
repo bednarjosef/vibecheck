@@ -846,7 +846,8 @@ function noteReachability(offline) {
 function createWindow() {
   win = new BrowserWindow({
     width: 560,
-    height: 240,
+    height: 300, // headroom for a wrapped incident title; the pill hugs its
+    // screen-edge side, so spare height is just invisible window
     frame: false,
     transparent: true,
     resizable: false,
