@@ -53,6 +53,8 @@ const settings = {
   displayId: null,       // null = primary display
   position: 'top',       // which edge the pill drops in from: top | bottom
   weekReset: null,       // a real weekly reset moment, learned from Claude Code
+  streak: null,          // { day, count } — the best-known run of active days,
+                         // carried here because transcripts get pruned
   accountUsage: true,    // ask the account itself for the real percentages
   statuslinePrev: null,  // the status line we displaced: the shim defers to
                          // its command, and restoring puts the object back
@@ -70,6 +72,9 @@ function loadConfig() {
     }
     if (typeof c.displayId === 'number') settings.displayId = c.displayId;
     if (Number.isFinite(c.weekReset)) settings.weekReset = c.weekReset;
+    if (c.streak && Number.isFinite(c.streak.day) && Number.isFinite(c.streak.count)) {
+      settings.streak = { day: c.streak.day, count: c.streak.count };
+    }
     if (SOUND_THEMES.includes(c.soundTheme)) settings.soundTheme = c.soundTheme;
     if (POSITIONS.includes(c.position)) settings.position = c.position;
     if (c.statuslinePrev && typeof c.statuslinePrev === 'object') settings.statuslinePrev = c.statuslinePrev;
@@ -542,13 +547,47 @@ function announce(window, pct) {
   autoPeek(6_000);
 }
 
+// today so far, for the day tally the rank is judged on
+function dayWindow() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return { since: d.getTime() };
+}
+
+// The transcripts can only testify as far back as Claude Code keeps them —
+// 30 days by default — so a long habit read from the files alone would cap
+// at a month. The best count is carried in config: stepped forward when
+// today extends it, trusted over the files when pruning shortened their
+// story, overruled by them when they know a longer one.
+function noteStreak() {
+  const d = usage.streak();
+  const today = usage.dayKey(Date.now());
+  const s = settings.streak;
+  let count = d.days;
+  if (s && Number.isFinite(s.day) && Number.isFinite(s.count)) {
+    if (s.day === today) count = Math.max(count, s.count);
+    else if (s.day === today - 1) count = Math.max(count, s.count + (d.today ? 1 : 0));
+    // older than yesterday: the streak it described has already broken —
+    // whatever the files say now is the whole truth
+  }
+  if (d.today && (!s || s.day !== today || count > s.count)) {
+    settings.streak = { day: today, count };
+    saveConfig();
+  }
+  return count;
+}
+
 function sendUsage() {
   const raw = readLimitsFile(); // one read feeds both
   learnWeekReset(raw);
   const limits = readLimits(raw);
-  const local = usage.summary(weekWindow(), sessionWindow(raw));
+  const local = usage.summary(weekWindow(), sessionWindow(raw), dayWindow());
   const data =
     local || limits ? { ...(local || { session: null, week: null }), limits } : null;
+  if (data) {
+    data.streak = noteStreak();
+    data.topShare = local && local.day ? usage.topShare(local.day.tokens) : null;
+  }
   lastUsage = data;
   if (win && !win.isDestroyed()) win.webContents.send('usage', data);
   updateTray();

@@ -296,3 +296,80 @@ test('token counts stay three digits wide', () => {
   assert.equal(fmtTokens(12_500_000), '13M');
   assert.equal(fmtTokens(3_400_000_000), '3.4B');
 });
+
+// ── the calendar: streaks and today's rank ──────────────────────────
+
+// touch a file onto a given local day, at midday — raw DAY steps from now
+// can cross a DST shift and land an hour into the wrong day
+const onDay = (s, name, k) => {
+  const noon = new Date();
+  noon.setHours(12, 0, 0, 0);
+  const t = (noon.getTime() - k * DAY) / 1000;
+  fs.utimesSync(path.join(s.dir, name), t, t);
+};
+
+test('streak: consecutive transcript days, counted back from today', async () => {
+  const s = sandbox();
+  s.write('d0.jsonl', [line({ at: Date.now(), id: 'a', out: 1 })]);
+  s.write('d1.jsonl', [line({ at: Date.now(), id: 'b', out: 1 })]);
+  onDay(s, 'd1.jsonl', 1);
+  s.write('d2.jsonl', [line({ at: Date.now(), id: 'c', out: 1 })]);
+  onDay(s, 'd2.jsonl', 2);
+  s.write('d4.jsonl', [line({ at: Date.now(), id: 'd', out: 1 })]);
+  onDay(s, 'd4.jsonl', 4); // the quiet day 3 ends the run at three
+  await s.usage.refresh();
+  assert.deepEqual(s.usage.streak(), { days: 3, today: true });
+});
+
+test("streak: yesterday's run survives a morning with no session yet", async () => {
+  const s = sandbox();
+  for (const [n, k] of [['a', 1], ['b', 2], ['c', 3]]) {
+    s.write(n + '.jsonl', [line({ at: Date.now(), id: n, out: 1 })]);
+    onDay(s, n + '.jsonl', k);
+  }
+  await s.usage.refresh();
+  assert.deepEqual(s.usage.streak(), { days: 3, today: false });
+});
+
+test('streak: a full quiet day ends it at zero', async () => {
+  const s = sandbox();
+  s.write('a.jsonl', [line({ at: Date.now(), id: 'a', out: 1 })]);
+  onDay(s, 'a.jsonl', 2);
+  await s.usage.refresh();
+  assert.deepEqual(s.usage.streak(), { days: 0, today: false });
+});
+
+test('topShare: the fitted curve holds its anchors', () => {
+  const { topShare, fmtShare } = sandbox().usage;
+  assert.ok(Math.abs(topShare(500_000) - 50) < 0.1); // the median active day
+  const ninety = topShare(2_000_000); // ~90th percentile of active days
+  assert.ok(ninety >= 9 && ninety <= 11, 'top ' + ninety + '%');
+  const heavy = topShare(10_000_000); // deep in the tail, not pinned to 1
+  assert.ok(heavy > 0.2 && heavy < 0.5, 'top ' + heavy + '%');
+  assert.equal(topShare(100_000_000), 0.01); // the floor holds the far end
+  assert.equal(topShare(0), null); // no tokens, no rank
+  assert.ok(topShare(50_000) > 90); // a light day sits far down the field
+});
+
+test('topShare: whole percents until the tail asks for decimals', () => {
+  const { topShare, fmtShare } = sandbox().usage;
+  assert.equal(fmtShare(topShare(2_000_000)), '10%');
+  assert.equal(fmtShare(topShare(10_000_000)), '0.3%');
+  assert.equal(fmtShare(0.047), '0.05%');
+  assert.equal(fmtShare(0.01), '0.01%');
+  assert.equal(fmtShare(12.4), '12%');
+});
+
+test('the day tally sees only today, and only when asked', async () => {
+  const s = sandbox();
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  s.write('a.jsonl', [
+    line({ at: Date.now(), id: 'now', out: 10 }),
+    line({ at: midnight.getTime() - HOUR, id: 'old', out: 5 }),
+  ]);
+  await s.usage.refresh();
+  const out = s.usage.summary(null, null, { since: midnight.getTime() });
+  assert.equal(out.day.tokens, 10);
+  assert.equal(s.usage.summary(null, null).day, null);
+});
