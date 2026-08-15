@@ -31,13 +31,28 @@ const seen = new Set(); // `${message.id}:${requestId}`
 
 let refreshing = null;
 
+// ── the calendar of active days ─────────────────────────────────────
+// Read from the files' own dates rather than their contents: statting every
+// transcript costs microseconds, parsing months of history does not. A file
+// marks the day it was born and the day it was last written — a session is
+// a day long, occasionally two across a midnight, so its two ends cover it.
+// Claude Code prunes old transcripts (30 days by default), which caps how
+// far back the files can testify; main.js carries the best streak forward
+// in config so a long habit survives the pruning.
+const dayKey = (ms) =>
+  Math.floor((ms - new Date(ms).getTimezoneOffset() * 60_000) / 86_400_000);
+
+let activeDays = new Set();
+
 function listTranscripts() {
   const out = [];
+  const days = new Set();
   const cutoff = Date.now() - KEEP_MS;
   let dirs = [];
   try {
     dirs = fs.readdirSync(PROJECTS_DIR);
   } catch (_) {
+    activeDays = days;
     return out; // no Claude Code on this machine — usage just stays hidden
   }
   for (const d of dirs) {
@@ -53,11 +68,67 @@ function listTranscripts() {
       const p = path.join(dir, n);
       try {
         const st = fs.statSync(p);
+        days.add(dayKey(st.mtimeMs));
+        // a birth after the last write marks nothing — that's a file whose
+        // clock was moved under it, not a day someone worked
+        if (st.birthtimeMs && st.birthtimeMs <= st.mtimeMs) days.add(dayKey(st.birthtimeMs));
         if (st.mtimeMs >= cutoff) out.push({ path: p, size: st.size });
       } catch (_) {}
     }
   }
+  activeDays = days;
   return out;
+}
+
+// Days in a row, counted back from today — or from yesterday, because a
+// streak isn't broken at breakfast: it's only gone once a whole day passed
+// without a session. `today` says whether the day underway has counted yet.
+function streak(now = Date.now()) {
+  const today = dayKey(now);
+  const anchor = activeDays.has(today) ? today : today - 1;
+  let days = 0;
+  while (activeDays.has(anchor - days)) days++;
+  return { days, today: activeDays.has(today) };
+}
+
+// ── where today's tally sits among everyone's ───────────────────────
+// Offline, from a fitted curve rather than a live cohort. Anthropic's own
+// cost figures for Claude Code — an average of $6 per developer per active
+// day, with 90% of users under $12 — convert through this file's counting
+// (input + output + cache creation, never cache re-reads) to roughly 500K
+// counted tokens on the median active day and ~2M at the 90th percentile.
+// A log-normal through those two anchors is the whole model: a day's usage
+// is a product of multiplicative choices — hours held, agents run, models
+// picked — and products of factors take this shape. It puts a 10M-token day
+// around the top 0.3%, with 30M pinning the 0.01% floor. The population is
+// users active that day, not everyone who ever installed.
+const SHARE_MEDIAN = 500_000;
+const SHARE_SIGMA = 1.1; // in log space: ln(2M / 500K) / z(0.90)
+
+// Φ via Abramowitz–Stegun 7.1.26 — seven digits, which the display's finest
+// step (0.01%) actually leans on
+function phi(z) {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const d = Math.exp((-z * z) / 2) / Math.sqrt(2 * Math.PI);
+  const p =
+    d * t * (0.31938153 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+  return z >= 0 ? 1 - p : p;
+}
+
+// "top N" as a share of active users, in percent — a float, floored at
+// 0.01 so the far tail still names a number. fmtShare decides the digits.
+function topShare(tokens) {
+  if (!Number.isFinite(tokens) || tokens <= 0) return null;
+  const z = Math.log(tokens / SHARE_MEDIAN) / SHARE_SIGMA;
+  return Math.max((1 - phi(z)) * 100, 0.01);
+}
+
+// Whole percents read best until the tail, where the decimals are the whole
+// point: 12% → 2% → 0.3% → 0.05% → 0.01%. The pill carries its own copy of
+// this (an inline page can't require), so the two have to change together.
+function fmtShare(pct) {
+  if (pct >= 1) return Math.round(pct) + '%';
+  return parseFloat(pct.toPrecision(1)) + '%';
 }
 
 function ingest(buf, state) {
@@ -139,7 +210,7 @@ function refresh() {
 // last one closed, which is a floor the replay can start from.
 const dated = (w) => !!w && Number.isFinite(w.since) && Number.isFinite(w.resetAt);
 
-function summary(week, session) {
+function summary(week, session, day) {
   const marks = new Map();
   for (const f of files.values()) {
     for (const [b, t] of f.buckets) marks.set(b, (marks.get(b) || 0) + t);
@@ -185,6 +256,8 @@ function summary(week, session) {
       tokens: since(realWeek ? week.since : now - WEEK_MS),
       resetAt: realWeek ? week.resetAt : null,
     },
+    // today, midnight to now — the slice the rank is judged on
+    day: day && Number.isFinite(day.since) ? { tokens: since(day.since) } : null,
   };
 }
 
@@ -219,4 +292,4 @@ function summaryLine(data) {
     .join(' · ');
 }
 
-module.exports = { refresh, summary, fmtTokens, summaryLine };
+module.exports = { refresh, summary, fmtTokens, summaryLine, dayKey, streak, topShare, fmtShare };

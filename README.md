@@ -23,6 +23,12 @@ Above them it says whether Claude itself is up. Let go and it melts away.
 Tap the key to pin it, hold it to peek. It floats over whatever you're doing,
 ignores your clicks, and leaves nothing behind.
 
+Under the meters, one quiet line keeps score: how many days in a row you've
+used Claude Code, and — once today's tally clears the median — roughly where
+it puts you among everyone coding with it that day, from a curve fitted to
+Anthropic's published per-developer cost figures. A 10M-token day is
+somewhere in the top 1%.
+
 You need [Claude Code](https://claude.com/claude-code) on the same machine,
 on a Pro or Max plan, because that's where the numbers come from. Without it
 you still get Claude's live status, just not your usage.

@@ -402,6 +402,25 @@
     justify-self: end;
     min-width: 6ch;
   }
+
+  /* ── the habit line ──────────────────────────────────────────────
+     Days in a row, and where today's tally sits among everyone's — one
+     line under the meters, in the same quiet tier as the tallies.
+     Unlike the incident message it does get a vote on the card's width:
+     it is short and bounded (a count and a percentage, no prose), and
+     wrapping a line this small read worse than the few pixels it asks
+     for. */
+  #foot {
+    display: none;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--dim);
+    opacity: 0.5;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  #foot.has { display: block; }
 </style>
 </head>
 <body>
@@ -412,6 +431,7 @@
     </div>
     <div id="affected"></div>
     <div id="usage"></div>
+    <div id="foot"></div>
   </div>
 
 <script>
@@ -483,6 +503,7 @@
   const headEl = document.getElementById('head');
   const wordEl = document.getElementById('word');
   const affectedEl = document.getElementById('affected');
+  const footEl = document.getElementById('foot');
   const usageEl = document.getElementById('usage');
   let usageData = null;
   let statusData = null;
@@ -497,6 +518,11 @@
         : n >= 1000
           ? Math.round(n / 1000) + 'K'
           : String(n);
+
+  // whole percents until the tail, where the decimals are the whole point:
+  // 12% → 2% → 0.3% → 0.05%. usage.js carries the original — keep in step.
+  const fmtShare = (pct) =>
+    pct >= 1 ? Math.round(pct) + '%' : parseFloat(pct.toPrecision(1)) + '%';
 
   // how long a window has left, in its two largest units: 23m · 2h 14m · 5d 5h
   function fmtLeft(until) {
@@ -539,6 +565,7 @@
     // a bare notice is the whole card, so nothing gets drawn under it
     if (!usageData || (notice && notice.bare)) {
       usageEl.classList.remove('has');
+      footEl.classList.remove('has');
       return;
     }
     const lim = usageData.limits || {};
@@ -552,6 +579,19 @@
     usageEl.classList.toggle('nobars', !bars);
     usageEl.classList.toggle('notoks', !toks);
     usageEl.classList.toggle('has', rows.length > 0);
+
+    // the habit line: the streak once there is one, the rank once it's
+    // flattering enough to mean anything — "top 82%" is a figure nobody
+    // wants said, so below the median the day just hasn't earned it yet
+    const segs = [];
+    if (usageData.streak > 0) {
+      segs.push(usageData.streak + (usageData.streak === 1 ? ' day streak' : ' days streak'));
+    }
+    if (usageData.topShare != null && usageData.topShare <= 50) {
+      segs.push('top ' + fmtShare(usageData.topShare) + ' today');
+    }
+    footEl.textContent = segs.join(' · ');
+    footEl.classList.toggle('has', segs.length > 0);
     balance();
   }
 
