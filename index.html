@@ -315,14 +315,17 @@
 
   /* ── Claude Code usage ────────────────────────────────────────────
      One grid, one row per window, every row the same shape: how full it
-     is, the figure, the local tally, how long it has left. Columns take
-     exactly the width of their widest cell, so the card can't be narrower
-     without breaking alignment — and the last one takes the slack, so a
-     long incident title pulls the times out to the right edge instead of
-     leaving a hole under it. Nothing here appears or disappears. */
+     is, the figure, then the tally and the clock flowing behind it. The
+     bars take the slack: when the headline or the habit line is wider
+     than the table, the meters grow more ticks to meet it rather than
+     leaving a hole in the row. The tally and the clock share one cell
+     and flow at the same 11px the columns use — a clock pinned to the
+     right edge looked aligned in the mock and like a hole in the pill,
+     because "2h 6m" is narrower than "19h 46m" and the difference has to
+     sit somewhere; at the end of the row it sits where nothing shows. */
   #usage {
     display: none;
-    grid-template-columns: auto auto auto 1fr;
+    grid-template-columns: minmax(40px, 1fr) auto auto;
     align-items: center;
     column-gap: 11px;
     row-gap: 6px;
@@ -331,20 +334,24 @@
 
   #usage.has { display: grid; }
 
-  /* no local tally beside the percentages */
-  #usage.notoks { grid-template-columns: auto auto 1fr; }
-
   /* token counts have no denominator, so there's no bar to draw — and the
-     count is already the figure, so no second column either */
+     count is already the figure, so no bar column either */
   #usage.nobars.notoks { grid-template-columns: auto 1fr; }
 
   /* the row and the meter are groupings for the markup's sake — the grid
      needs to see the cells themselves */
   .grp, .m { display: contents; }
 
+  /* the tally and the clock, single file behind the figure */
+  .aux {
+    display: flex;
+    gap: 11px;
+    align-items: baseline;
+  }
+
   /* One quiet tier, not two nearly-alike ones. The tally and the clock are
-     separated by where they sit — tight to the figure vs out at the right
-     edge — so they don't also need to differ in weight. */
+     separated by their order in the row, so they don't also need to differ
+     in weight. */
   .tok, .when {
     font-size: 11px;
     letter-spacing: 0.04em;
@@ -361,10 +368,9 @@
   .m.warm { --tone: var(--tone-warm); }
   .m.hot  { --tone: var(--tone-hot); }
 
-  /* 4ch is exactly "100%" — the widest this can ever be, so the column is
-     as narrow as it can get and still never jump */
+  /* right-aligned so mixed-width figures share an edge; no reserved width —
+     a 1ch lead on a short figure read as an inconsistent gap after the bar */
   .m .n {
-    min-width: 4ch;
     text-align: right;
     font-size: 13px;
     letter-spacing: 0.04em;
@@ -375,33 +381,39 @@
   .m.warm .n,
   .m.hot .n { color: var(--tone); opacity: 1; }
 
-  /* ten marks, lit left to right — a count rather than a length, and
-     quantised to 10% so it never shimmers by a pixel as the number ticks */
+  /* Marks lit left to right — a count rather than a length. The pitch is
+     fixed at one mark per 4px and the bar stretches, so a wider card means
+     more marks, not fatter ones; at the 40px minimum that's the original
+     ten. The lit width is measured in cqw so it tracks whatever width the
+     grid hands the bar, and rounds up to whole marks so it never shimmers
+     by a pixel as the number ticks. */
   .m .ticks {
     position: relative;
-    width: 40px; height: 9px;
+    min-width: 40px; height: 9px;
+    container-type: inline-size;
     --pitch: repeating-linear-gradient(90deg, #000 0 3px, transparent 3px 4px);
   }
+  /* Both layers snap to whole marks: the track rounds the bar's width down
+     so a stray 1–3px at the end can't show a clipped sliver of a mark, and
+     the lit layer is capped at the track so 100% ends on a full mark too. */
   .m .ticks::before,
   .m .ticks::after {
     content: '';
     position: absolute;
-    inset: 0;
+    left: 0; top: 0; bottom: 0;
     mask-image: var(--pitch);
     -webkit-mask-image: var(--pitch);
   }
-  .m .ticks::before { background: rgba(255, 255, 255, 0.12); }
+  .m .ticks::before {
+    background: rgba(255, 255, 255, 0.12);
+    width: calc(round(down, 100cqw, 4px) - 1px);
+  }
   .m .ticks::after {
     background: var(--tone);
-    width: calc(round(up, var(--p) * 0.4, 4) * 1px);
+    width: min(calc(round(up, var(--p) * 1cqw, 4px)), calc(round(down, 100cqw, 4px) - 1px));
     transition: width 260ms cubic-bezier(0.2, 0.85, 0.25, 1);
   }
 
-  /* how long this window has left — always there, never moves */
-  .when {
-    justify-self: end;
-    min-width: 6ch;
-  }
 
   /* ── the habit line ──────────────────────────────────────────────
      Days in a row, and where today's tally sits among everyone's — one
@@ -550,16 +562,16 @@
     };
   }
 
-  // Every row the same shape, so the eye reads down the columns: how full ·
-  // the figure · this machine's tally · how long it has left. A bar is a
-  // fraction of something, so token counts don't get one — and the empty
-  // cell keeps the columns aligned when only one window has a percentage.
+  // Every row the same shape: how full · the figure · the tally and the
+  // clock in single file behind it. A bar is a fraction of something, so
+  // token counts don't get one — and the empty cell keeps the bar column
+  // aligned when only one window has a percentage.
   const rowHTML = (r, bars, toks) =>
     `<span class="grp"><span class="m ${r.tone}" style="--p:${r.pct || 0}">` +
     (bars ? (r.pct === null ? '<span></span>' : '<span class="ticks"></span>') : '') +
-    `<span class="n">${r.label}</span>` +
-    (toks ? `<span class="tok">${r.tokens || ''}</span>` : '') +
-    `</span><span class="when">${r.when}</span></span>`;
+    `<span class="n">${r.label}</span></span><span class="aux">` +
+    (toks && r.tokens ? `<span class="tok">${r.tokens}</span>` : '') +
+    `<span class="when">${r.when}</span></span>`;
 
   function renderUsage() {
     // a bare notice is the whole card, so nothing gets drawn under it
