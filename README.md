@@ -117,11 +117,11 @@ it as an estimate of the same thing the percentages report exactly.
 percentages by pointing `statusLine` in `~/.claude/settings.json` at a small
 shim. Nothing does that any more — a status line can only speak while a
 session is on screen rendering one, which left the figures aging every time
-you closed the terminal. The shim's numbers are no longer read at all: the
-account answers directly instead. If an old install left the shim in your
-status line, it's just writing a file nobody reads — take it back out and
-restore whatever status line you had before it with
-`vibecheck --restore-statusline`.
+you closed the terminal. The account answers directly instead, and the shim
+is gone from the app entirely: if an old install left one in your status
+line, the first launch of this version takes it back out and restores
+whatever status line you had before it. `vibecheck --restore-statusline`
+does the same by hand, without starting the app.
 
 ## Platform notes
 
@@ -140,7 +140,7 @@ restore whatever status line you had before it with
 Quit from the tray menu, then `npm uninstall -g vibecheck-app`, or use the
 usual uninstaller for your platform. If an older version left its shim in your
 Claude Code status line, `vibecheck --restore-statusline` puts yours back —
-and now that nothing reinstalls it, it stays back.
+any launch of a current version does the same automatically.
 
 ## License
 
