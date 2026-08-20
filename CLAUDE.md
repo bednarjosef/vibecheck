@@ -67,12 +67,15 @@ Four more things, which have each cost a wrong conclusion:
   API key. Seed a stamped `limits.json` *and* set `accountUsage: false` in
   the test profile's `config.json`, or the poll will overwrite the fixture
   within a minute.
-- **Nothing installs the status-line shim any more.** `autoSetupLimits()`,
-  `limitsInstall()` and the shim itself are still here — installs from 1.4 and
-  earlier are still out there writing `limits.json`, and still owed
-  `vibecheck --restore-statusline`. But no launch writes `statusLine` in
-  `~/.claude/settings.json` now, so a test instance can't aim the real
-  machine-wide setting at a temp path the way it used to.
+- **The status-line shim is gone, and launches remove its leftovers.** The
+  shim and its installer were deleted after 1.5.8; what remains is
+  `limitsUninstall()` and `cleanupStatusline()`, which every launch runs:
+  a `statusLine` in `~/.claude/settings.json` that points at the shim is
+  restored to whatever it displaced, and the shim copy in the profile's
+  `userData` is deleted. `vibecheck --restore-statusline` is the same undo
+  by hand. So no launch ever *writes* a shim `statusLine` — but a launch
+  *can* edit the real machine-wide `settings.json`, once, if it finds a
+  1.4-era install there. `--user-data-dir` does not isolate `~/.claude`.
 - **Record events, don't sample state.** An auto-peek lasts a few seconds, so
   checking whether the pill is visible some time later proves nothing either
   way. Listen for `reveal` and keep timestamps.

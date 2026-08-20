@@ -227,14 +227,14 @@ let burstCount = 0;
 let holdStartedAt = 0;
 let suppressKeyup = false;
 
-// ── real limit % (opt-in Claude Code statusline shim) ───────────────
-// Claude Code hands every statusline script the account's true /usage
-// percentages (rate_limits.*.used_percentage — documented, Pro/Max).
-// "Install" points ~/.claude/settings.json at our shim, which tees those
-// numbers into <userData>/limits.json and defers to any original
-// statusline. Nothing here touches credentials or the network.
+// ── real limit % (cleaning up after the retired statusline shim) ────
+// Versions up to 1.4 read the account's true /usage percentages by pointing
+// `statusLine` in ~/.claude/settings.json at a shim copied into <userData>,
+// which teed the numbers into limits.json. The account poll (below) answers
+// directly now, and the shim is gone from the package — what remains is the
+// way back out for installs the old versions made, which every launch now
+// takes itself instead of waiting to be asked.
 const CLAUDE_SETTINGS = path.join(os.homedir(), '.claude', 'settings.json');
-const SHIM_SRC = path.join(__dirname, 'statusline-shim.js');
 const SHIM_DEST = path.join(app.getPath('userData'), 'statusline-shim.js');
 const LIMITS_PATH = path.join(app.getPath('userData'), 'limits.json');
 const LIMITS_STALE_MS = 14 * 24 * 60 * 60 * 1000; // poll gone quiet — forget its numbers
@@ -252,39 +252,6 @@ function limitsInstalled() {
   try { return isShimCommand(readClaudeSettings().statusLine); } catch (_) { return false; }
 }
 
-function limitsInstall() {
-  let claude;
-  try { claude = readClaudeSettings(); }
-  catch (_) { return { ok: false, error: '~/.claude/settings.json is not valid JSON — fix it first' }; }
-
-  try {
-    // copy the shim out of the package: npm updates, dev checkouts and
-    // AppImages all move or vanish; <userData> is the one stable home
-    fs.mkdirSync(app.getPath('userData'), { recursive: true });
-    fs.copyFileSync(SHIM_SRC, SHIM_DEST);
-
-    const prev = claude.statusLine;
-    if (prev && !isShimCommand(prev)) {
-      settings.statuslinePrev = prev; // restored on disable
-      saveConfig();
-    }
-
-    // one-time safety copy from before we ever touched the file
-    const backup = path.join(app.getPath('userData'), 'claude-settings.backup.json');
-    if (!fs.existsSync(backup) && fs.existsSync(CLAUDE_SETTINGS)) {
-      fs.copyFileSync(CLAUDE_SETTINGS, backup);
-    }
-
-    claude.statusLine = { type: 'command', command: `node "${SHIM_DEST}" "${app.getPath('userData')}"` };
-    if (prev && prev.padding !== undefined) claude.statusLine.padding = prev.padding;
-    fs.mkdirSync(path.dirname(CLAUDE_SETTINGS), { recursive: true });
-    fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(claude, null, 2) + '\n');
-  } catch (err) {
-    return { ok: false, error: 'install failed: ' + err.message };
-  }
-  return { ok: true };
-}
-
 function limitsUninstall() {
   let claude;
   try { claude = readClaudeSettings(); }
@@ -297,6 +264,7 @@ function limitsUninstall() {
       fs.writeFileSync(CLAUDE_SETTINGS, JSON.stringify(claude, null, 2) + '\n');
     }
     fs.rmSync(LIMITS_PATH, { force: true });
+    fs.rmSync(SHIM_DEST, { force: true });
   } catch (err) {
     return { ok: false, error: 'uninstall failed: ' + err.message };
   }
@@ -305,19 +273,18 @@ function limitsUninstall() {
   return { ok: true };
 }
 
-// Nothing calls this any more, and that's the point: the account answers for
-// itself now (see below), so no launch edits `statusLine` in a machine-wide
-// Claude Code settings file. The shim, its installer and its uninstaller stay
-// here because installs made by earlier versions are still out there, still
-// writing limits.json, and still owed the way back out that
-// `vibecheck --restore-statusline` gives them.
-function autoSetupLimits() {
-  if (!fs.existsSync(path.dirname(CLAUDE_SETTINGS))) return; // no Claude Code here
-  if (limitsInstalled()) {
-    try { fs.copyFileSync(SHIM_SRC, SHIM_DEST); } catch (_) {}
-    return;
-  }
-  if (limitsInstall().ok) sendUsage();
+// Runs at every launch: installs made by 1.4 and earlier are still out
+// there, and stopping the installs (1.5) turned out not to be enough — the
+// statusLine they wrote just sat in ~/.claude/settings.json saying "press F8
+// to vibecheck" forever. So the leftovers are now taken out on sight: the
+// statusLine entry goes back to whatever it displaced, and the shim copy in
+// <userData> goes away. The same undo `vibecheck --restore-statusline` runs
+// by hand.
+function cleanupStatusline() {
+  try {
+    if (limitsInstalled()) limitsUninstall();
+    else fs.rmSync(SHIM_DEST, { force: true }); // an orphaned copy, nothing points at it
+  } catch (_) {} // next launch tries again
 }
 
 function readLimitsFile() {
@@ -355,21 +322,6 @@ function readLimits(raw = readLimitsFile()) {
   } catch (_) { return null; } // absent or malformed — pill falls back to token counts
 }
 
-// Disconnected along with the shim: the only writer this watcher existed to
-// hear was the shim (the account poll calls sendUsage itself after writing),
-// and shim writes are no longer read at all. Kept, commented, in case a
-// second writer ever earns its way back in.
-// function watchLimits() {
-//   let t = null;
-//   try {
-//     fs.watch(app.getPath('userData'), (_ev, name) => {
-//       if (name !== 'limits.json') return;
-//       clearTimeout(t);
-//       t = setTimeout(sendUsage, 250); // debounce the tmp+rename pair
-//     });
-//   } catch (_) {} // no watcher = the 60s poll still picks changes up
-// }
-
 // ── the account's own figures ───────────────────────────────────────
 // Where the numbers actually come from now. A status line can only speak
 // while a session is on screen rendering one, which is precisely when the
@@ -394,7 +346,7 @@ function writeLimits(limits) {
   const tmp = path.join(dir, 'limits.json.tmp');
   // the stamp is what readLimitsFile() looks for — shim writes don't carry it
   fs.writeFileSync(tmp, JSON.stringify({ ...limits, source: 'account' }));
-  fs.renameSync(tmp, LIMITS_PATH); // atomic, exactly as the shim does it
+  fs.renameSync(tmp, LIMITS_PATH); // atomic, exactly as the shim did it
 }
 
 // Always reschedules itself, so the chain can't be broken by one bad answer.
@@ -1315,12 +1267,11 @@ function startHook() {
 // need a door that doesn't go through the tray: `vibecheck --settings`
 const wantsSettings = (argv) => argv.includes('--settings');
 
-// The undo for the one Claude Code setting this app writes. It runs before
-// the single-instance lock, so it does the work itself instead of poking a
-// running copy — and it says so rather than exiting silently, because it's
-// the answer to "what did you do to my settings.json". A vibecheck that is
-// still installed will put the shim back on its next launch: this is for
-// after you quit it, or for good.
+// The undo for the one Claude Code setting old versions of this app wrote.
+// Every launch runs the same cleanup by itself now; this flag does it
+// without starting the app — after an uninstall, or just for certainty —
+// and it says so rather than exiting silently, because it's the answer to
+// "what did you do to my settings.json".
 if (process.argv.includes('--restore-statusline')) {
   loadConfig();
   const was = limitsInstalled();
@@ -1339,6 +1290,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   loadConfig();
+  cleanupStatusline();
   app.on('second-instance', (_e, argv) => {
     // typing `vibecheck` right after `npm i -g` is exactly when someone is
     // asking whether the update took, so it's the moment worth answering
@@ -1364,7 +1316,6 @@ if (!app.requestSingleInstanceLock()) {
     pollAccount();
     refreshUsage();
     setInterval(refreshUsage, POLL_MS);
-    // watchLimits() — see its definition: only the shim needed watching for
     setTimeout(checkForUpdate, 15_000);
     setInterval(checkForUpdate, 24 * 60 * 60 * 1000);
     setInterval(checkReplaced, POLL_MS);

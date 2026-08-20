@@ -2,10 +2,10 @@
 // transcripts (~/.claude/projects/**/*.jsonl). Every assistant message there
 // carries exact token counts, so usage is derivable fully offline — no
 // account access, no endpoints, no auth. Neither window's real start is in
-// the logs, though: Claude Code reports both through the statusline shim, and
-// they're used whenever we have them. Without the shim the week is a rolling
-// 7 days and the session is replayed from the transcripts — a 5-hour block
-// that opens with the first message after the previous one lapsed.
+// the logs, though: the account poll reports both, and they're used whenever
+// we have them. Without them the week is a rolling 7 days and the session is
+// replayed from the transcripts — a 5-hour block that opens with the first
+// message after the previous one lapsed.
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
